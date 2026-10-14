@@ -127,8 +127,8 @@ mock auth). Ports, DSN and container name are defaults; override them via `.env`
    [`backend/README.md`](../../backend/README.md)). The backend has no reference-data cache, so seed patches applied
    while it runs are picked up immediately. Start the DB *before* the backend — the Spring context fails to
    initialize if the Oracle listener isn't up yet, and then every `/api` route fails.
-3. **Frontend** on `:3000`: `npm run dev` in `frontend/`. The repo default `public/amplify-config.js` has
-   `mockUser: true`, so on localhost the app signs in a mock user with no Cognito flow. The suite picks the mock
+3. **Frontend** on `:3000`: `npm run dev` in `frontend/`. The repo default `public/config.js` has
+   `mockUser: true`, so on localhost the app signs in a mock user with no CSS flow. The suite picks the mock
    administrator or submitter per scenario (`pages/common/mockUser.ts`); `preflight/mock-user.setup.ts` checks
    that those users still match `src/context/auth/mockUsers.ts`.
 

@@ -10,7 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -25,7 +25,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
  * Story 9.2 acceptance — authorization on the Schedule 9 writes (AC1/AC7; AD-7). Security ON,
  * driving the real {@code oauth2ResourceServer} chain and {@code @PreAuthorize}: {@code
  * EDIT_SCHEDULE} on POST/PUT/DELETE, {@code VIEW_SCHEDULE} on {@code POST /check-status}.
- * Authorities come from the PRODUCTION {@link CognitoGroupsJwtAuthenticationConverter}.
+ * Authorities come from the PRODUCTION {@link FamJwtAuthenticationConverter}.
  *
  * <p>The 403 bodies are VALID on purpose ({@code @Valid}/{@code @Validated} bind BEFORE
  * {@code @PreAuthorize}, so an invalid body would 400 and prove nothing about authorization). Mill
@@ -57,8 +57,8 @@ class Schedule9WriteAuthorizationIT extends AbstractOracleIT {
           + "\"cost\":6000,\"sourceCode\":\"A\"}]}";
 
   private static final String PROBLEM_JSON = "application/problem+json";
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   /**
    * A VALID body (with a revision token, so a PUT 403 fires at @PreAuthorize, not at @Validated).
@@ -73,7 +73,7 @@ class Schedule9WriteAuthorizationIT extends AbstractOracleIT {
 
   private RequestPostProcessor jwtWithGroups(List<String> groups) {
     return jwt()
-        .jwt(j -> j.claim("cognito:groups", groups))
+        .jwt(j -> j.claim("identity_provider", "azureidir").claim("client_roles", groups))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 

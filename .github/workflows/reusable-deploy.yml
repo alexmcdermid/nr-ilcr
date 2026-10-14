@@ -47,9 +47,17 @@ jobs:
       DB_PASS: ${{ secrets.ORACLEDB_PASSWORD }}
       DB_HOST: ${{ secrets.ORACLEDB_HOST }}
       DB_SERVICENAME: ${{ secrets.ORACLEDB_SERVICENAME }}
-      COGNITO_POOL: ${{ secrets.USER_POOLS_ID }}
-      COGNITO_CLIENT: ${{ secrets.USER_POOLS_WEB_CLIENT_ID }}
     steps:
+      - name: Validate SSO configuration
+        env:
+          OIDC_ISSUER_URI: ${{ vars.ILCR_OIDC_ISSUER_URI }}
+          OIDC_CLIENT_ID: ${{ vars.ILCR_OIDC_CLIENT_ID }}
+        run: |
+          if [[ ! "$OIDC_ISSUER_URI" =~ ^https://[A-Za-z0-9.-]+(:[0-9]+)?/(auth/)?realms/[A-Za-z0-9._-]+$ ]] ||
+             [[ ! "$OIDC_CLIENT_ID" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::ILCR_OIDC_ISSUER_URI and ILCR_OIDC_CLIENT_ID must identify the provisioned CSS client"
+            exit 1
+          fi
       - uses: bcgov/action-deployer-openshift@e2d60eb9cacceb89c3b97d8dcf0a2c460eea5eab # v4.2.3
         id: deploy
         with:
@@ -58,12 +66,6 @@ jobs:
           oc_server: ${{ vars.OC_SERVER }}
           oc_token: ${{ secrets.OC_TOKEN }}
           overwrite: true
-          # Cognito redirect fallbacks must match FAM's registration EXACTLY
-          # (Cognito string-matches; see FAM repo oidc_clients_ilcr.tf):
-          # sign-in has NO trailing slash, and dev PR hosts (nr-ilcr-0..49)
-          # register only the plain <app>/logout. test/prod also register the
-          # chain-prefixed logout — set env-scoped COGNITO_REDIRECT_SIGN_OUT
-          # there for full federated (SiteMinder/Keycloak) logout.
           parameters:
             -p ZONE='${{ inputs.target }}'
             -p NAME='${{ github.event.repository.name }}'
@@ -71,12 +73,12 @@ jobs:
             -p SPRING_DATASOURCE_PASSWORD="$DB_PASS"
             -p ORACLEDB_HOST="$DB_HOST"
             -p ORACLEDB_SERVICENAME="$DB_SERVICENAME"
-            -p COGNITO_USER_POOL="$COGNITO_POOL"
-            -p COGNITO_CLIENT_ID="$COGNITO_CLIENT"
-            -p COGNITO_DOMAIN='${{ vars.COGNITO_DOMAIN || 'lza-prod-fam-user-pool-domain.auth.ca-central-1.amazoncognito.com' }}'
-            -p COGNITO_OAUTH_SCOPES='${{ vars.COGNITO_OAUTH_SCOPES || 'openid' }}'
-            -p COGNITO_REDIRECT_SIGN_IN='${{ vars.COGNITO_REDIRECT_SIGN_IN || format('https://{0}-{1}.apps.gold.devops.gov.bc.ca', github.event.repository.name, inputs.target) }}'
-            -p COGNITO_REDIRECT_SIGN_OUT='${{ vars.COGNITO_REDIRECT_SIGN_OUT || format('https://{0}-{1}.apps.gold.devops.gov.bc.ca/logout', github.event.repository.name, inputs.target) }}'
+            -p ILCR_OIDC_ISSUER_URI='${{ vars.ILCR_OIDC_ISSUER_URI }}'
+            -p ILCR_OIDC_CLIENT_ID='${{ vars.ILCR_OIDC_CLIENT_ID }}'
+            -p APP_ENV='${{ inputs.environment || 'dev' }}'
+            -p OIDC_IDIR_HINT='${{ vars.ILCR_OIDC_IDIR_HINT || 'azureidir' }}'
+            -p OIDC_BCEID_HINT='${{ vars.ILCR_OIDC_BCEID_HINT || 'bceidbusiness' }}'
+            -p OIDC_SITEMINDER_LOGOUT_URL='${{ vars.ILCR_OIDC_SITEMINDER_LOGOUT_URL }}'
           triggers: ${{ inputs.triggers }}
 
   deploy:
@@ -102,7 +104,6 @@ jobs:
           - name: frontend
             file: frontend/openshift.deploy.yml
             parameters: -p IMAGE_TAG="${{ inputs.tag }}"
-              -p COGNITO_DOMAIN="${{ vars.COGNITO_DOMAIN || 'lza-prod-fam-user-pool-domain.auth.ca-central-1.amazoncognito.com' }}"
     outputs:
       triggered: ${{ steps.deploy.outputs.triggered }}
     steps:

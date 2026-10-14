@@ -8,7 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -34,8 +34,8 @@ class Schedule8RateWriteAuthorizationIT extends AbstractOracleIT {
   // 595/8953).
   private static final String RATES = "/api/v1/schedule8/samples/8951/rates";
   private static final int MILL = 595;
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
   private static final String VALID_BODY =
       """
       {"costItemCode": 82, "costingRate": 5.00, "costTypeCode": "CT1"}""";
@@ -44,7 +44,7 @@ class Schedule8RateWriteAuthorizationIT extends AbstractOracleIT {
 
   private RequestPostProcessor jwtWithGroups(List<String> groups) {
     return jwt()
-        .jwt(j -> j.claim("cognito:groups", groups))
+        .jwt(j -> j.claim("identity_provider", "azureidir").claim("client_roles", groups))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 

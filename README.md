@@ -8,11 +8,11 @@ ILCR collects annual logging cost information from forestry licensees to support
 - **Both roles** print schedules and run the Mill Information and Mill Status reports; submitters see only their
   own mills. The data extract is for Ministry staff only.
 
-The application keeps the existing Oracle `THE` database as its unchanged system of record and signs users in through FAM (AWS Cognito).
+The application keeps the existing Oracle `THE` database as its unchanged system of record and signs users in through modern FAM / BC Gov CSS.
 
 ## Stack
 
-- Frontend: React 19, TypeScript, Vite, TanStack Router, IBM Carbon with the BC Gov NR theme, aws-amplify (FAM/Cognito)
+- Frontend: React 19, TypeScript, Vite, TanStack Router, IBM Carbon with the BC Gov NR theme, oidc-client-ts (FAM/CSS)
 - Backend: Java 21, Spring Boot 4.1.1, Maven, executable JVM JAR, Spring Security OAuth2 resource server, Spring Data JDBC + Hikari against Oracle `THE`, embedded JasperReports 7
 - Tests: JUnit + Testcontainers Oracle (backend), Vitest + Testing Library + MSW (frontend), Playwright + playwright-bdd + axe (`frontend/e2e`)
 - Local platform: direct Maven/npm runs or Docker Compose with backend, frontend, optional Caddy, and sanitized Oracle env wiring
@@ -118,48 +118,16 @@ The recommended, zero-import workaround is to leverage your Windows host's trust
    ```
    Docker Compose will automatically detect this variable and mount your local Windows Maven cache into the container's `/root/.m2` path, bypassing the certificate handshake issues completely!
 
-### Authentication (FAM/Cognito) — local testing
+### Authentication (modern FAM / CSS)
 
-The SPA has two auth modes, selected at runtime by `public/amplify-config.js` (loaded before the
-bundle). The repo default is **mock**; deployed environments mount a per-env ConfigMap over it. See
-`src/context/auth/` (the `AuthProvider` seam) and `src/config/auth/amplify-initializer.ts`.
+The SPA uses a public OIDC client with PKCE and signed CSS access tokens. Runtime configuration
+comes from `frontend/public/config.js`, replaced by a ConfigMap in deployed environments.
+Local mock mode is enabled only with `mockUser: true` on localhost and backend security off.
 
-**Mock mode (default — no Cognito).** `npm run dev` with the backend running (security off by
-default) signs you in automatically. Use the **"Mock user"** dropdown in the header to switch
-`ILCR_ADMIN` ↔ `ILCR_SUBMITTER` — it switches both the nav/route-guards **and** the backend mock
-principal (via the `X-Mock-Groups` header), so it exercises role gating end to end. This is the
-fastest path for manual testing.
-
-**Real FAM/Cognito login (Hosted UI).**
-
-1. Frontend — copy the example config over the default (do **not** commit it; the repo default must
-   stay `mockUser: true`):
-   ```bash
-   cd frontend
-   cp amplify-config.local.example.js public/amplify-config.js
-   npm run dev            # then hard-refresh the browser (public/ files load at page load)
-   ```
-2. Backend — run with security on so `/api/v1/me` validates the real ID token:
-   ```bash
-   cd backend
-   ILCR_SECURITY_ENABLED=true COGNITO_REGION=ca-central-1 \
-   COGNITO_USER_POOL=ca-central-1_UpeAqsYt4 COGNITO_CLIENT_ID=352pis0ark86dam7ht1jlp9uj5 \
-   SPRING_PROFILES_ACTIVE=oracle,openshift ./mvnw spring-boot:run
-   ```
-3. Open `http://localhost:3000` → FAM Hosted UI → sign in (IDIR/BCeID) → back to the app with your
-   real role. Confirm the exact `cognitoDomain` with the FAM admin if the Hosted UI does not load.
-
-**Dev-only testing aids (real session, local dev only — `import.meta.env.DEV`, tree-shaken from every
-deployed build):**
-
-- **"View as (dev)"** header dropdown — overrides the role the SPA uses (nav + route guards) so you
-  can test both roles without re-logging-in. It is **frontend-only**: the backend still enforces your
-  real token, so admin APIs still `403` if your account isn't really in that group.
-- A **"viewing as" warning banner** appears whenever an override is active, naming your real role.
-- A **Sign out** button (header, Logout icon) runs the Cognito/loginproxy logout chain on a real
-  session; hidden in mock mode.
-
-When done with real login: `git checkout -- frontend/public/amplify-config.js`.
+For real login, configure the environment's `ILCR_OIDC_ISSUER_URI` and `ILCR_OIDC_CLIENT_ID`,
+set frontend `mockUser: false`, and enable backend security with the `openshift` profile's
+SSO configuration. See [the migration/setup guide](docs/fam-keycloak-migration.md) for exact
+variables, callbacks, identity/mill mapping, acceptance and rollback steps.
 
 ## Frontend Shared Conventions
 
@@ -219,7 +187,7 @@ Every endpoint and the permission it requires is listed in [`docs/api-inventory.
 
 - **Environments.** Pull requests that touch deployable paths deploy a sandbox (zone = PR number mod 50). Merges to `main` deploy to TEST.
 - **PROD is not yet enabled.** The PROD pipeline (deploy, Sysdig monitor, image promotion) is commented out in `.github/workflows/merge.yml` until the `prod` GitHub environment has its own `ORACLEDB_*` secrets. Restore those jobs to open PROD.
-- **Security is always on.** Deployed pods always enforce FAM/Cognito JWT authentication: `ILCR_SECURITY_ENABLED` is hard-coded `"true"` in `backend/openshift.deploy.yml`.
+- **Security is always on.** Deployed pods always enforce FAM/CSS access-token authentication: `ILCR_SECURITY_ENABLED` is hard-coded `"true"` in `backend/openshift.deploy.yml`.
 - **Datasource.** `ILCR_DATASOURCE_ENABLED` defaults to `true`. It can be set to `false` with a **repository-level** GitHub variable for a data-less smoke deployment. The deploy matrix reads it before the environment attaches, so an environment-scoped value is ignored.
 - **Fail-closed guard.** The backend also refuses to start a deployed pod with security off while the datasource is on (`DeployedSecurityGuard`), so mock auth can never serve real data.
 

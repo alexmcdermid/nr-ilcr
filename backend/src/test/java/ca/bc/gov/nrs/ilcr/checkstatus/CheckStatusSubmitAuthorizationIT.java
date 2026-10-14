@@ -9,7 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -44,8 +44,8 @@ class CheckStatusSubmitAuthorizationIT extends AbstractOracleIT {
   private static final String PROBLEM_JSON = "application/problem+json";
   private static final String NOT_DRAFT =
       "Schedules 1-10 are no longer in Draft and cannot be submitted.";
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   @MockitoBean private JwtDecoder jwtDecoder;
   @Autowired private JdbcTemplate jdbc;
@@ -56,7 +56,7 @@ class CheckStatusSubmitAuthorizationIT extends AbstractOracleIT {
 
   private RequestPostProcessor jwtWithGroups(List<String> groups) {
     return jwt()
-        .jwt(j -> j.claim("cognito:groups", groups))
+        .jwt(j -> j.claim("identity_provider", "azureidir").claim("client_roles", groups))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 
@@ -65,8 +65,9 @@ class CheckStatusSubmitAuthorizationIT extends AbstractOracleIT {
     return jwt()
         .jwt(
             j ->
-                j.claim("custom:idp_user_id", "UNASSOCIATEDSUBMITTERXXXX0000001")
-                    .claim("cognito:groups", List.of("ILCR_SUBMITTER")))
+                j.claim("idir_user_guid", "UNASSOCIATEDSUBMITTERXXXX0000001")
+                    .claim("identity_provider", "azureidir")
+                    .claim("client_roles", List.of("ILCR_SUBMITTER")))
         .authorities(new SimpleGrantedAuthority("SUBMITTER"));
   }
 
@@ -74,8 +75,9 @@ class CheckStatusSubmitAuthorizationIT extends AbstractOracleIT {
     return jwt()
         .jwt(
             j ->
-                j.claim("custom:idp_user_id", userGuid)
-                    .claim("cognito:groups", List.of("ILCR_ADMIN", "ILCR_SUBMITTER")))
+                j.claim("idir_user_guid", userGuid)
+                    .claim("identity_provider", "azureidir")
+                    .claim("client_roles", List.of("ILCR_ADMIN", "ILCR_SUBMITTER")))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 

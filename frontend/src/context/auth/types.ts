@@ -45,3 +45,5 @@ export type AuthContextValue = {
   /** Only defined under the real provider in local dev; absent in every deployed build. */
   devRoleSwitch?: DevRoleSwitch
 }
+
+export type LoginProvider = 'idir' | 'business-bceid'

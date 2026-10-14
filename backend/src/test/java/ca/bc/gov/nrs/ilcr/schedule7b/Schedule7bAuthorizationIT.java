@@ -11,7 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -27,7 +27,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
  * VIEW_SCHEDULE} for the GET read and the POST check-status, {@code EDIT_SCHEDULE} for the
  * POST/PUT/DELETE culvert writes. Security ON: drives the real {@code oauth2ResourceServer} chain +
  * {@code @PreAuthorize}, with authorities derived through the production {@link
- * CognitoGroupsJwtAuthenticationConverter}.
+ * FamJwtAuthenticationConverter}.
  *
  * <p>This is where slice S30 / BR-08 lands. Legacy gated the page on its own WebADE action key
  * {@code schedule7B}, derived from the view filename and distinct from the coarser {@code
@@ -55,8 +55,8 @@ class Schedule7bAuthorizationIT extends AbstractOracleIT {
   /** Since #359 the endpoint requires the on-screen body; its content is irrelevant to authz. */
   private static final String CHECK_BODY = "{\"culverts\":[]}";
 
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   /**
    * A valid culvert body (default + OnUpdate groups) so a denial is authorization, not validation.
@@ -87,7 +87,7 @@ class Schedule7bAuthorizationIT extends AbstractOracleIT {
 
   private RequestPostProcessor jwtWithGroups(List<String> groups) {
     return jwt()
-        .jwt(j -> j.claim("cognito:groups", groups))
+        .jwt(j -> j.claim("identity_provider", "azureidir").claim("client_roles", groups))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 

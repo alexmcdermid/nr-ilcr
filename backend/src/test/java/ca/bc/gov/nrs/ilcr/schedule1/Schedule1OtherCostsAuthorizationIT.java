@@ -8,7 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -21,7 +21,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 /**
  * Story 2.4 (AD-7): authorization on EDIT_SCHEDULE for the Other-Costs write verbs. Security ON,
- * real {@code @PreAuthorize} + {@link CognitoGroupsJwtAuthenticationConverter}. A principal without
+ * real {@code @PreAuthorize} + {@link FamJwtAuthenticationConverter}. A principal without
  * EDIT_SCHEDULE must get 403 {@code problem+json} on POST and DELETE — this catches an
  * action-string or annotation mistake that the security-off {@link Schedule1OtherCostsIT} cannot.
  */
@@ -30,14 +30,14 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 class Schedule1OtherCostsAuthorizationIT extends AbstractOracleIT {
 
   private static final String ENDPOINT = "/api/v1/schedule1/other-costs";
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   @MockitoBean private JwtDecoder jwtDecoder;
 
   private RequestPostProcessor jwtWithGroups(List<String> groups) {
     return jwt()
-        .jwt(j -> j.claim("cognito:groups", groups))
+        .jwt(j -> j.claim("identity_provider", "azureidir").claim("client_roles", groups))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 

@@ -25,36 +25,25 @@ parameters:
   - name: ORACLEDB_SERVICENAME
     description: Oracle database service name (environment-scoped GitHub secret)
     required: true
-  - name: COGNITO_USER_POOL
-    description: Cognito (FAM) user pool ID for JWT validation
+  - name: ILCR_OIDC_ISSUER_URI
+    description: CSS issuer from this environment's installation JSON
     required: true
-  - name: COGNITO_CLIENT_ID
-    description: Cognito (FAM) web-client ID, validated as the ID token's aud
+  - name: ILCR_OIDC_CLIENT_ID
+    description: Public CSS client ID (installation JSON resource)
     required: true
 
-  # ── Frontend amplify config ───────────────────────────────
-  # Lives here (not in frontend/openshift.deploy.yml) so the values are
-  # processed by the init step, where environment-scoped GitHub variables
-  # resolve. The deploy job reads vars inside a matrix, which GitHub
-  # evaluates before the environment is attached — env-scoped values are
-  # silently ignored there. (Same pattern as nr-csp.)
-  - name: COGNITO_DOMAIN
-    description: Cognito hosted UI domain (no https://)
-    required: true
-  - name: COGNITO_OAUTH_SCOPES
-    description: Comma-separated OAuth scopes
-    value: openid
-  - name: COGNITO_REDIRECT_SIGN_IN
-    description: Post-login redirect URL (must be FAM-registered verbatim)
-    required: true
-  # Cognito validates logout_uri by exact string match against the FAM
-  # client's registered sign-out URLs (FAM repo: lza-infrastructure/terraform/
-  # server/oidc_clients_ilcr.tf). Dev PR hosts register only the plain
-  # <app>/logout; test/prod also register the full SiteMinder → Keycloak →
-  # app chain (see frontend/amplify-config.local.example.js for its shape).
-  - name: COGNITO_REDIRECT_SIGN_OUT
-    description: Post-logout redirect URL (must be FAM-registered verbatim)
-    required: true
+  # Public browser configuration is generated in the environment-bound init job.
+  - name: APP_ENV
+    description: Application environment (dev, test, prod)
+    value: dev
+  - name: OIDC_IDIR_HINT
+    value: azureidir
+  - name: OIDC_BCEID_HINT
+    value: bceidbusiness
+  - name: OIDC_SITEMINDER_LOGOUT_URL
+    description: Optional SiteMinder logoff override
+    value: ""
+
 objects:
   # ── Backend Secret ────────────────────────────────────────
   - apiVersion: v1
@@ -70,30 +59,40 @@ objects:
       ORACLEDB_KEYSTORE_SECRET: ${ORACLEDB_KEYSTORE_SECRET}
       ORACLEDB_HOST: ${ORACLEDB_HOST}
       ORACLEDB_SERVICENAME: ${ORACLEDB_SERVICENAME}
-      COGNITO_USER_POOL: ${COGNITO_USER_POOL}
-      COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID}
 
-  # ── Frontend amplify ConfigMap (runtime-injected, mounted by the frontend
-  #    Deployment over the repo's mock-auth placeholder public/amplify-config.js;
-  #    see frontend/src/env.ts). Pool/client ids are public identifiers — every
+  # Public SSO settings are not credentials and belong in a ConfigMap.
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: ${NAME}-${ZONE}-backend-auth
+      labels:
+        app: ${NAME}-${ZONE}
+    data:
+      ILCR_OIDC_ISSUER_URI: ${ILCR_OIDC_ISSUER_URI}
+      ILCR_OIDC_CLIENT_ID: ${ILCR_OIDC_CLIENT_ID}
+
+  # ── Frontend OIDC ConfigMap (runtime-injected, mounted by the frontend
+  #    Deployment over the repo's mock-auth placeholder public/config.js;
+  #    see frontend/src/env.ts). Issuer/client ids are public identifiers — every
   #    browser downloads this file — so surfacing them here is fine. ──
   - apiVersion: v1
     kind: ConfigMap
     metadata:
-      name: ${NAME}-${ZONE}-frontend-amplify-config
+      name: ${NAME}-${ZONE}-frontend-config
       labels:
         app: ${NAME}-${ZONE}
     data:
-      amplify-config.js: |
-        window.amplifyConfig = {
+      config.js: |
+        window.appConfig = {
           mockUser: false,
-          userPoolId: '${COGNITO_USER_POOL}',
-          userPoolClientId: '${COGNITO_CLIENT_ID}',
-          cognitoDomain: '${COGNITO_DOMAIN}',
-          oauthScopes: '${COGNITO_OAUTH_SCOPES}'.split(','),
-          redirectSignIn: '${COGNITO_REDIRECT_SIGN_IN}',
-          redirectSignOut: '${COGNITO_REDIRECT_SIGN_OUT}',
-        }
+          appEnv: '${APP_ENV}',
+          oidcIssuerUri: '${ILCR_OIDC_ISSUER_URI}',
+          oidcClientId: '${ILCR_OIDC_CLIENT_ID}',
+          oidcIdirHint: '${OIDC_IDIR_HINT}',
+          oidcBceidHint: '${OIDC_BCEID_HINT}',
+          oidcSiteminderLogoutUrl: '${OIDC_SITEMINDER_LOGOUT_URL}',
+        };
+
   - apiVersion: networking.k8s.io/v1
     kind: NetworkPolicy
     metadata:

@@ -4,7 +4,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import java.util.Map;
@@ -62,8 +62,8 @@ abstract class Schedule11ReversalSupport extends AbstractOracleIT {
   /** The audit name, from {@code custom:idp_username} (30-char column). */
   static final String ACTING_USER = "reverse11admin";
 
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   private static final List<String> TABLES =
       List.of(
@@ -81,9 +81,10 @@ abstract class Schedule11ReversalSupport extends AbstractOracleIT {
         Jwt.withTokenValue("reverse11-it-token")
             .header("alg", "none")
             .subject("26262626-5555-4444-5555-666666666666")
-            .claim("custom:idp_user_id", ADMIN_GUID)
-            .claim("custom:idp_username", ACTING_USER)
-            .claim("cognito:groups", List.of("ILCR_ADMIN"))
+            .claim("idir_user_guid", ADMIN_GUID)
+            .claim("idir_username", ACTING_USER)
+            .claim("identity_provider", "azureidir")
+            .claim("client_roles", List.of("ILCR_ADMIN"))
             .build();
     return authentication(CONVERTER.convert(token));
   }

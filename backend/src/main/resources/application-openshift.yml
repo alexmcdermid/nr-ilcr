@@ -3,15 +3,13 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: https://cognito-idp.${COGNITO_REGION:ca-central-1}.amazonaws.com/${COGNITO_USER_POOL}
-          jwk-set-uri: https://cognito-idp.${COGNITO_REGION:ca-central-1}.amazonaws.com/${COGNITO_USER_POOL}/.well-known/jwks.json
+          issuer-uri: ${ILCR_OIDC_ISSUER_URI}
+          jwk-set-uri: ${ILCR_OIDC_ISSUER_URI}/protocol/openid-connect/certs
 
 ilcr:
   security:
-    # This app's Cognito web-client id, validated as the ID token's aud (Story 1.0). Per env via
-    # the backend Secret (common/openshift.init.yml); never committed.
-    cognito:
-      allowed-audience: ${COGNITO_CLIENT_ID:}
+    oidc:
+      client-id: ${ILCR_OIDC_CLIENT_ID}
 
 server:
   shutdown: graceful

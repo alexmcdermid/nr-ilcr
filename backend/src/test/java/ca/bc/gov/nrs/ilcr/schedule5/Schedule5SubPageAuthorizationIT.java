@@ -7,7 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -22,8 +22,8 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
  * Story 7.4 acceptance — authorization on the sub-page endpoints (AC15; AD-7). Security ON, driving
  * the real {@code oauth2ResourceServer} chain and {@code @PreAuthorize}: {@code VIEW_SCHEDULE} on
  * the two GETs, {@code EDIT_SCHEDULE} on the four writes. Authorities come from the PRODUCTION
- * {@link CognitoGroupsJwtAuthenticationConverter}, so a change to the group-to-authority mapping
- * fails here rather than silently widening access.
+ * {@link FamJwtAuthenticationConverter}, so a change to the group-to-authority mapping fails here
+ * rather than silently widening access.
  *
  * <p><strong>The 403 bodies are VALID on purpose.</strong> {@code @Valid} body binding runs during
  * argument resolution, BEFORE {@code @PreAuthorize} fires, so an invalid body would yield 400 and
@@ -47,8 +47,8 @@ class Schedule5SubPageAuthorizationIT extends AbstractOracleIT {
   private static final String MILL = "693";
   private static final String YEAR = "2016";
 
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   /** A VALID body — so a 403 fires at {@code @PreAuthorize}, not at {@code @Valid}. */
   private static final String VALID_BODY =
@@ -60,7 +60,7 @@ class Schedule5SubPageAuthorizationIT extends AbstractOracleIT {
 
   private RequestPostProcessor jwtWithGroups(List<String> groups) {
     return jwt()
-        .jwt(j -> j.claim("cognito:groups", groups))
+        .jwt(j -> j.claim("identity_provider", "azureidir").claim("client_roles", groups))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 

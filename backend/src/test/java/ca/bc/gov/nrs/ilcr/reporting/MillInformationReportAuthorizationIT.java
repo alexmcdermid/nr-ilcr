@@ -4,7 +4,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -33,14 +33,14 @@ class MillInformationReportAuthorizationIT extends AbstractOracleIT {
 
   private static final String ENDPOINT = "/api/v1/reports/mill-information";
   private static final String SEEDED_YEAR = "2021";
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   @MockitoBean private JwtDecoder jwtDecoder;
 
   private RequestPostProcessor jwtWithGroups(List<String> groups) {
     return jwt()
-        .jwt(j -> j.claim("cognito:groups", groups))
+        .jwt(j -> j.claim("identity_provider", "azureidir").claim("client_roles", groups))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 
@@ -49,8 +49,9 @@ class MillInformationReportAuthorizationIT extends AbstractOracleIT {
     return jwt()
         .jwt(
             j ->
-                j.claim("custom:idp_user_id", "UNASSOCIATEDSUBMITTERXXXX0000001")
-                    .claim("cognito:groups", List.of("ILCR_SUBMITTER")))
+                j.claim("idir_user_guid", "UNASSOCIATEDSUBMITTERXXXX0000001")
+                    .claim("identity_provider", "azureidir")
+                    .claim("client_roles", List.of("ILCR_SUBMITTER")))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 

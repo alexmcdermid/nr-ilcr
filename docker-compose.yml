@@ -37,6 +37,7 @@ services:
     container_name: frontend
     entrypoint: sh -c "npm ci --ignore-scripts && npm run dev"
     environment:
+      OIDC_ISSUER_URI: ${ILCR_OIDC_ISSUER_URI:-https://not-configured.invalid/auth/realms/standard}
       BACKEND_URL: http://backend:8080
       PORT: 3000
       NODE_ENV: development

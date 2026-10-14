@@ -10,7 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -25,8 +25,8 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
  * Story 7.2 acceptance — authorization on the Schedule 5 writes (AC7; AD-7). Security ON, driving
  * the real {@code oauth2ResourceServer} chain and {@code @PreAuthorize}: {@code EDIT_SCHEDULE} on
  * POST/PUT/DELETE, {@code VIEW_SCHEDULE} on {@code POST /check-status}. Authorities come from the
- * PRODUCTION {@link CognitoGroupsJwtAuthenticationConverter}, not a hand-built list, so a change to
- * the group-to-authority mapping fails here.
+ * PRODUCTION {@link FamJwtAuthenticationConverter}, not a hand-built list, so a change to the
+ * group-to-authority mapping fails here.
  *
  * <p><strong>The 403 bodies are VALID on purpose.</strong> {@code @Valid} body binding runs during
  * argument resolution, BEFORE {@code @PreAuthorize} fires, so an invalid body would yield 400 and
@@ -51,8 +51,8 @@ class Schedule5WriteAuthorizationIT extends AbstractOracleIT {
   private static final String CAMPS = "/api/v1/schedule5/camps";
   private static final String CHECK_STATUS = "/api/v1/schedule5/check-status";
   private static final String PROBLEM_JSON = "application/problem+json";
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   /** A VALID camp body — so a 403 fires at {@code @PreAuthorize}, not at {@code @Valid}. */
   private static final String VALID_BODY =
@@ -64,7 +64,7 @@ class Schedule5WriteAuthorizationIT extends AbstractOracleIT {
 
   private RequestPostProcessor jwtWithGroups(List<String> groups) {
     return jwt()
-        .jwt(j -> j.claim("cognito:groups", groups))
+        .jwt(j -> j.claim("identity_provider", "azureidir").claim("client_roles", groups))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 

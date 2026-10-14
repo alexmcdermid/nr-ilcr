@@ -15,7 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import ca.bc.gov.nrs.ilcr.dataextract.csv.DataExtractGenerator;
 import ca.bc.gov.nrs.ilcr.millcontext.MillContextRepository;
 import ca.bc.gov.nrs.ilcr.schedule1.Schedule1Service;
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -79,12 +79,15 @@ class DataExtractCsvIT extends AbstractOracleIT {
   private static final String NO_STATUS = "** NO STATUS **";
   private static final String END_MARKER = "**** End ****";
 
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   private static final RequestPostProcessor ADMIN =
       jwt()
-          .jwt(j -> j.claim("cognito:groups", List.of("ILCR_ADMIN")))
+          .jwt(
+              j ->
+                  j.claim("identity_provider", "azureidir")
+                      .claim("client_roles", List.of("ILCR_ADMIN")))
           .authorities(j -> CONVERTER.convert(j).getAuthorities());
 
   /**

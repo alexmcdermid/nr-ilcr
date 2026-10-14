@@ -3,7 +3,7 @@ package ca.bc.gov.nrs.ilcr.support;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -64,18 +64,18 @@ public abstract class AbstractOracleIT {
    */
   protected static final String CANONICAL_SUBMITTER_GUID = "CANONSUBMITTERBBBBCCCCDDDD000001";
 
-  private static final CognitoGroupsJwtAuthenticationConverter CANONICAL_CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CANONICAL_CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   /**
    * A real-JWT {@code ILCR_SUBMITTER} principal carrying {@link #CANONICAL_SUBMITTER_GUID} — the
    * canonical submitter associated to every seeded mill. Authorities come through the production
-   * {@link CognitoGroupsJwtAuthenticationConverter} (a {@code cognito:groups} of {@code
-   * ILCR_SUBMITTER}), so the converter path is exercised exactly as before, and the {@code
-   * custom:idp_user_id} claim lets the caller pass Story 5.7 mill-scope for any seeded mill. Use
-   * this wherever a security-ON IT asserts a submitter can REACH a schedule/mill-context endpoint
-   * (the drop-in for the old {@code jwtWithGroups(List.of("ILCR_SUBMITTER"))}). For the DENIED
-   * case, use an unassociated GUID.
+   * {@link FamJwtAuthenticationConverter} (a {@code cognito:groups} of {@code ILCR_SUBMITTER}), so
+   * the converter path is exercised exactly as before, and the {@code custom:idp_user_id} claim
+   * lets the caller pass Story 5.7 mill-scope for any seeded mill. Use this wherever a security-ON
+   * IT asserts a submitter can REACH a schedule/mill-context endpoint (the drop-in for the old
+   * {@code jwtWithGroups(List.of("ILCR_SUBMITTER"))}). For the DENIED case, use an unassociated
+   * GUID.
    *
    * @return the request post-processor injecting the canonical submitter principal
    */
@@ -83,8 +83,10 @@ public abstract class AbstractOracleIT {
     return jwt()
         .jwt(
             j ->
-                j.claim("custom:idp_user_id", CANONICAL_SUBMITTER_GUID)
-                    .claim("cognito:groups", java.util.List.of("ILCR_SUBMITTER")))
+                j.claim("identity_provider", "azureidir")
+                    .claim("idir_username", "TESTUSER")
+                    .claim("idir_user_guid", CANONICAL_SUBMITTER_GUID)
+                    .claim("client_roles", java.util.List.of("ILCR_SUBMITTER")))
         .authorities(j -> CANONICAL_CONVERTER.convert(j).getAuthorities());
   }
 

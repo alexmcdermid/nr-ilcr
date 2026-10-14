@@ -7,7 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -21,10 +21,10 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
  * Acceptance test for authorization on VIEW_SCHEDULE (AD-7) for Schedule 5. Security ON; drives the
  * real {@code oauth2ResourceServer} chain + {@code @PreAuthorize}.
  *
- * <p>Authorities derive through the PRODUCTION {@link CognitoGroupsJwtAuthenticationConverter}
- * rather than {@code spring-security-test}'s default, which builds authorities from the {@code
- * scope} claim and would bypass the app's own group mapping entirely — the test would then pass
- * without ever exercising the real rule. Mirrors the Schedule 1/2/4/6 pattern.
+ * <p>Authorities derive through the PRODUCTION {@link FamJwtAuthenticationConverter} rather than
+ * {@code spring-security-test}'s default, which builds authorities from the {@code scope} claim and
+ * would bypass the app's own group mapping entirely — the test would then pass without ever
+ * exercising the real rule. Mirrors the Schedule 1/2/4/6 pattern.
  */
 @TestPropertySource(properties = "ilcr.security.enabled=true")
 @DisplayName("GET /api/v1/schedule5 — authorization on VIEW_SCHEDULE (AD-7)")
@@ -33,14 +33,14 @@ class Schedule5AuthorizationIT extends AbstractOracleIT {
   private static final String ENDPOINT = "/api/v1/schedule5";
   private static final String SEEDED_MILL = "514";
   private static final String SEEDED_YEAR = "2021";
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   @MockitoBean private JwtDecoder jwtDecoder;
 
   private RequestPostProcessor jwtWithGroups(List<String> groups) {
     return jwt()
-        .jwt(j -> j.claim("cognito:groups", groups))
+        .jwt(j -> j.claim("identity_provider", "azureidir").claim("client_roles", groups))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 

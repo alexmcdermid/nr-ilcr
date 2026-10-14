@@ -1,31 +1,40 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
+import { ErrorResponse } from 'oidc-client-ts'
 import { server } from '@/test-setup'
 import RealAuthProvider from './RealAuthProvider'
 import useAuth from './useAuth'
+import { emitSessionExpired } from './sessionExpiredSignal'
+import type * as OidcService from '@/service/oidc-service'
 
 const mocks = vi.hoisted(() => ({
   fetchAuthSession: vi.fn(),
   signInWithRedirect: vi.fn(),
   signOut: vi.fn(),
+  removeUser: vi.fn(),
   hubHandlerRef: { current: undefined as undefined | ((e: { payload: unknown }) => void) },
 }))
 
-vi.mock('aws-amplify/auth', () => ({
-  fetchAuthSession: mocks.fetchAuthSession,
-  signInWithRedirect: mocks.signInWithRedirect,
-  signOut: mocks.signOut,
-}))
-
-vi.mock('aws-amplify/utils', () => ({
-  Hub: {
-    listen: (_channel: string, cb: (e: { payload: unknown }) => void) => {
-      mocks.hubHandlerRef.current = cb
-      return () => undefined
+vi.mock('@/service/oidc-service', async (importOriginal) => ({
+  AUTH_CALLBACK_PATH: '/authCallback',
+  isOidcConfigured: true,
+  getOidcUser: mocks.fetchAuthSession,
+  completeOidcLogin: mocks.fetchAuthSession,
+  startOidcLogin: mocks.signInWithRedirect,
+  endOidcSession: mocks.signOut,
+  getOidcReturnPath: () => '/schedule-9',
+  isSessionEnded: (await importOriginal<typeof OidcService>()).isSessionEnded,
+  getUserManager: () => ({
+    removeUser: mocks.removeUser,
+    events: {
+      addUserLoaded: (callback: () => void) => {
+        mocks.hubHandlerRef.current = () => callback()
+      },
+      removeUserLoaded: () => undefined,
     },
-  },
+  }),
 }))
 
 const ME = 'http://localhost:3000/api/v1/me'
@@ -58,15 +67,14 @@ function OverrideProbe() {
 }
 
 function withSession(idToken: string | undefined) {
-  mocks.fetchAuthSession.mockResolvedValue(
-    idToken ? { tokens: { idToken: { toString: () => idToken } } } : { tokens: undefined },
-  )
+  mocks.fetchAuthSession.mockResolvedValue(idToken ? { access_token: idToken } : null)
 }
 
 beforeEach(() => {
   mocks.fetchAuthSession.mockReset()
   mocks.signInWithRedirect.mockReset().mockResolvedValue(undefined)
   mocks.signOut.mockReset().mockResolvedValue(undefined)
+  mocks.removeUser.mockReset().mockResolvedValue(undefined)
   mocks.hubHandlerRef.current = undefined
   window.history.replaceState(null, '', '/')
   window.localStorage.clear()
@@ -114,15 +122,47 @@ describe('RealAuthProvider', () => {
     )
 
     await waitFor(() => expect(mocks.signInWithRedirect).toHaveBeenCalledTimes(1))
-    expect(mocks.signInWithRedirect).toHaveBeenCalledWith({
-      customState: '/schedule-1?millId=514',
-    })
+    expect(mocks.signInWithRedirect).toHaveBeenCalledWith()
     // The app is gated behind auth — children are not shown, only the sign-in chrome.
     expect(screen.getByRole('status')).toHaveTextContent('Signing in')
     expect(screen.queryByTestId('authed')).toBeNull()
   })
 
-  it('signs out through Amplify (which ends the upstream session via the logout chain)', async () => {
+  it('removes a rejected stored session before starting a fresh login', async () => {
+    mocks.fetchAuthSession.mockRejectedValue(new ErrorResponse({ error: 'invalid_grant' }))
+
+    render(
+      <RealAuthProvider>
+        <Probe />
+      </RealAuthProvider>,
+    )
+
+    await waitFor(() => expect(mocks.signInWithRedirect).toHaveBeenCalledOnce())
+    expect(mocks.removeUser).toHaveBeenCalledOnce()
+    expect(mocks.removeUser.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.signInWithRedirect.mock.invocationCallOrder[0],
+    )
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByTestId('authed')).toBeNull()
+  })
+
+  it('does not remove stored credentials after a rejected callback exchange', async () => {
+    window.history.replaceState(null, '', '/authCallback?code=spent&state=test')
+    mocks.fetchAuthSession.mockRejectedValue(new ErrorResponse({ error: 'invalid_grant' }))
+
+    render(
+      <RealAuthProvider>
+        <Probe />
+      </RealAuthProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Connection error'))
+    expect(mocks.removeUser).not.toHaveBeenCalled()
+    expect(mocks.signInWithRedirect).not.toHaveBeenCalled()
+    expect(window.location.pathname).toBe('/')
+  })
+
+  it('signs out through OIDC (which ends the upstream session via the logout chain)', async () => {
     withSession('id-token')
     server.use(
       http.get(ME, () =>
@@ -166,14 +206,16 @@ describe('RealAuthProvider', () => {
     )
     await waitFor(() => expect(mocks.hubHandlerRef.current).toBeDefined())
 
-    mocks.hubHandlerRef.current?.({ payload: { event: 'customOAuthState', data: '/schedule-9' } })
-
-    expect(window.location.pathname).toBe('/schedule-9')
+    window.history.replaceState(null, '', '/authCallback?code=test&state=test')
+    await act(async () => {
+      mocks.hubHandlerRef.current?.({ payload: { event: 'userLoaded' } })
+    })
+    await waitFor(() => expect(window.location.pathname).toBe('/schedule-9'))
   })
 
   it('shows a connection error (not a redirect loop) when the session lookup fails', async () => {
-    // A rejected fetchAuthSession is a transient/Amplify failure — bouncing to the Hosted UI on a
-    // valid Cognito session would return straight here and loop. Render an error with Retry instead.
+    // A rejected fetchAuthSession is a transient/OIDC failure — bouncing to the Hosted UI on a
+    // valid SSO session would return straight here and loop. Render an error with Retry instead.
     mocks.fetchAuthSession.mockRejectedValue(new Error('no session'))
 
     render(
@@ -184,6 +226,7 @@ describe('RealAuthProvider', () => {
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Connection error'))
     expect(mocks.signInWithRedirect).not.toHaveBeenCalled()
+    expect(mocks.removeUser).not.toHaveBeenCalled()
   })
 
   it('shows a connection error and retries (no loop) when /me fails with 5xx', async () => {
@@ -234,7 +277,7 @@ describe('RealAuthProvider', () => {
     expect(mocks.signOut).toHaveBeenCalledTimes(1)
   })
 
-  it('clears the user when the refresh token dies (tokenRefresh_failure Hub event)', async () => {
+  it('ends the session when SSO rejects the refresh token', async () => {
     withSession('id-token')
     server.use(
       http.get(ME, () =>
@@ -254,9 +297,10 @@ describe('RealAuthProvider', () => {
     )
     await waitFor(() => expect(screen.getByTestId('authed')).toHaveTextContent('true'))
 
-    mocks.hubHandlerRef.current?.({ payload: { event: 'tokenRefresh_failure' } })
-
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Signing in'))
+    await act(async () => emitSessionExpired())
+    expect(mocks.signOut).toHaveBeenCalledOnce()
+    expect(screen.getByRole('status')).toHaveTextContent('Signing out')
+    expect(mocks.signInWithRedirect).not.toHaveBeenCalled()
   })
 
   it('lets local dev override the viewed role (frontend only — real roles preserved)', async () => {

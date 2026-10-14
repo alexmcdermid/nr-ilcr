@@ -2,6 +2,7 @@ name: PR
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
 
 concurrency:
   group: ${{ github.event.number }}
@@ -53,10 +54,12 @@ jobs:
 
   deploys:
     name: Deploys (${{ github.event.number }})
+    if: (! github.event.pull_request.draft)
     needs: [builds, init]
     uses: ./.github/workflows/reusable-deploy.yml
     secrets: inherit
     with:
+      environment: dev
       target: ${{ needs.init.outputs.zone }}
       tag: ${{ github.event.pull_request.head.sha }}
       # database/ included so a database-only PR still deploys (deploy-database

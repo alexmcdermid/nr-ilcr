@@ -8,7 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -24,9 +24,9 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
  *
  * <p>Runs with security ON and drives the real {@code oauth2ResourceServer} chain +
  * {@code @PreAuthorize} — authorities are derived through the production {@link
- * CognitoGroupsJwtAuthenticationConverter} (same pattern as {@link Schedule1AuthorizationIT}, which
- * covers VIEW_SCHEDULE on GET). A principal without EDIT_SCHEDULE must get 403 {@code problem+json}
- * on both PUT and DELETE, with no data change.
+ * FamJwtAuthenticationConverter} (same pattern as {@link Schedule1AuthorizationIT}, which covers
+ * VIEW_SCHEDULE on GET). A principal without EDIT_SCHEDULE must get 403 {@code problem+json} on
+ * both PUT and DELETE, with no data change.
  *
  * <p>RED before implementation: with no PUT/DELETE handler mapped, security returns 405, not the
  * asserted 403. Class-level {@code @Disabled} is the red-phase gate; dev-story removes it once the
@@ -38,8 +38,8 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 class Schedule1WriteAuthorizationIT extends AbstractOracleIT {
 
   private static final String ENDPOINT = "/api/v1/schedule1";
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   // With security on, oauth2ResourceServer().jwt() needs a JwtDecoder bean at config time; the
   // jwt() post-processor injects the Jwt directly, so a mock satisfies construction.
@@ -47,7 +47,7 @@ class Schedule1WriteAuthorizationIT extends AbstractOracleIT {
 
   private RequestPostProcessor jwtWithGroups(List<String> groups) {
     return jwt()
-        .jwt(j -> j.claim("cognito:groups", groups))
+        .jwt(j -> j.claim("identity_provider", "azureidir").claim("client_roles", groups))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 

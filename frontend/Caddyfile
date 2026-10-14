@@ -57,10 +57,7 @@
 		Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate"
 		X-Content-Type-Options "nosniff"
 		Strict-Transport-Security "max-age=31536000"
-		# connect-src must include the regional Cognito IdP host (cognito-idp.<region>.amazonaws.com):
-		# Amplify calls it for SILENT TOKEN REFRESH. Without it the browser blocks the refresh, the
-		# access/id token expires at its TTL, the next request 401s and the user is signed out
-		# mid-session. The Hosted UI domain below only covers the OAuth login redirect, not refresh.
+		# CSS replaces Cognito for discovery, token exchange and refresh.
 		Content-Security-Policy "default-src 'self' https://*.gov.bc.ca;
 			script-src 'self' https://*.gov.bc.ca;
 			style-src 'self' https://fonts.googleapis.com https://use.fontawesome.com 'unsafe-inline'; 
@@ -69,7 +66,7 @@
 			frame-ancestors 'self'; 
 			form-action 'self';
 			block-all-mixed-content;
-			connect-src 'self' https://*.gov.bc.ca wss://*.gov.bc.ca https://{$COGNITO_DOMAIN:lza-prod-fam-user-pool-domain.auth.ca-central-1.amazoncognito.com} https://cognito-idp.{$COGNITO_REGION:ca-central-1}.amazonaws.com;"
+			connect-src 'self' https://*.gov.bc.ca wss://*.gov.bc.ca {$OIDC_ISSUER_URI}/;"
 		Referrer-Policy "same-origin"
 		Permissions-Policy "fullscreen=(self), camera=(), microphone=()"
 		Cross-Origin-Resource-Policy "same-origin"

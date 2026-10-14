@@ -7,7 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import ca.bc.gov.nrs.ilcr.assignment.MillAssociationService;
 import ca.bc.gov.nrs.ilcr.assignment.dto.MillSubmitter;
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -41,8 +41,8 @@ class UserLookupDisabledIT extends AbstractOracleIT {
    */
   private static final long ACTIVE_MILL = 752L;
 
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   @MockitoBean private JwtDecoder jwtDecoder;
 
@@ -57,7 +57,10 @@ class UserLookupDisabledIT extends AbstractOracleIT {
                 .param("firstName", "jane")
                 .with(
                     jwt()
-                        .jwt(j -> j.claim("cognito:groups", List.of("ILCR_ADMIN")))
+                        .jwt(
+                            j ->
+                                j.claim("identity_provider", "azureidir")
+                                    .claim("client_roles", List.of("ILCR_ADMIN")))
                         .authorities(j -> CONVERTER.convert(j).getAuthorities())))
         .andExpect(status().isNotFound());
   }
@@ -72,7 +75,10 @@ class UserLookupDisabledIT extends AbstractOracleIT {
             get("/api/v1/mills/{millId}/submitters", 514L)
                 .with(
                     jwt()
-                        .jwt(j -> j.claim("cognito:groups", List.of("ILCR_ADMIN")))
+                        .jwt(
+                            j ->
+                                j.claim("identity_provider", "azureidir")
+                                    .claim("client_roles", List.of("ILCR_ADMIN")))
                         .authorities(j -> CONVERTER.convert(j).getAuthorities())))
         .andExpect(status().isOk());
   }

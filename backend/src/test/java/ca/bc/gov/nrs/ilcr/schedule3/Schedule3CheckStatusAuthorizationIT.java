@@ -5,7 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -36,14 +36,14 @@ class Schedule3CheckStatusAuthorizationIT extends AbstractOracleIT {
 
   private static final long SEEDED_MILL = 514L;
   private static final int SEEDED_YEAR = 2021;
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   @MockitoBean private JwtDecoder jwtDecoder;
 
   private RequestPostProcessor jwtWithGroups(List<String> groups) {
     return jwt()
-        .jwt(j -> j.claim("cognito:groups", groups))
+        .jwt(j -> j.claim("identity_provider", "azureidir").claim("client_roles", groups))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 
@@ -97,8 +97,9 @@ class Schedule3CheckStatusAuthorizationIT extends AbstractOracleIT {
                     jwt()
                         .jwt(
                             j ->
-                                j.claim("custom:idp_user_id", CANONICAL_SUBMITTER_GUID)
-                                    .claim("cognito:groups", List.of()))
+                                j.claim("idir_user_guid", CANONICAL_SUBMITTER_GUID)
+                                    .claim("identity_provider", "azureidir")
+                                    .claim("client_roles", List.of()))
                         .authorities(j -> CONVERTER.convert(j).getAuthorities())))
         .andExpect(status().isForbidden())
         .andExpect(content().contentTypeCompatibleWith("application/problem+json"));

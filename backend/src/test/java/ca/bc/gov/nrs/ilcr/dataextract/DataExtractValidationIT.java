@@ -10,7 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -53,12 +53,15 @@ class DataExtractValidationIT extends AbstractOracleIT {
       "The end reporting year must be greater or equal to start year.";
   private static final String CSV_UTF8 = "application/csv;charset=UTF-8";
 
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   private static final RequestPostProcessor ADMIN =
       jwt()
-          .jwt(j -> j.claim("cognito:groups", List.of("ILCR_ADMIN")))
+          .jwt(
+              j ->
+                  j.claim("identity_provider", "azureidir")
+                      .claim("client_roles", List.of("ILCR_ADMIN")))
           .authorities(j -> CONVERTER.convert(j).getAuthorities());
 
   @MockitoBean private JwtDecoder jwtDecoder;

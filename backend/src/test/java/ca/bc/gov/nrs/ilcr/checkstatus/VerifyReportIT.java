@@ -8,7 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -92,8 +92,8 @@ class VerifyReportIT extends AbstractOracleIT {
       "This Mill is not active for the current Reporting Year. "
           + "Please select another mill from the Home Page.";
 
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   @MockitoBean private JwtDecoder jwtDecoder;
   @Autowired private JdbcTemplate jdbcTemplate;
@@ -105,22 +105,23 @@ class VerifyReportIT extends AbstractOracleIT {
    *
    * <p>Built through the PRODUCTION converter, and {@code sub} is deliberately NOT the acting user.
    * {@code spring-security-test}'s {@code jwt()} constructs the token itself and never calls {@link
-   * CognitoGroupsJwtAuthenticationConverter}, so the principal name falls back to {@code sub}:
-   * seeding {@code sub} with the acting user (as this class first did) made the stamped-actor
-   * assertion pass whichever claim the app read, harness or app alike. Converting the Jwt here
-   * means {@code getName()} comes from {@code auditUsername}'s {@code custom:idp_username}, so the
-   * assertion now fails if that resolution regresses — and {@code sub} is a 36-char UUID shape
-   * precisely because falling back to it would overflow the {@code VARCHAR2(30)} audit column
-   * (ORA-12899) in production.
+   * FamJwtAuthenticationConverter}, so the principal name falls back to {@code sub}: seeding {@code
+   * sub} with the acting user (as this class first did) made the stamped-actor assertion pass
+   * whichever claim the app read, harness or app alike. Converting the Jwt here means {@code
+   * getName()} comes from {@code auditUsername}'s {@code custom:idp_username}, so the assertion now
+   * fails if that resolution regresses — and {@code sub} is a 36-char UUID shape precisely because
+   * falling back to it would overflow the {@code VARCHAR2(30)} audit column (ORA-12899) in
+   * production.
    */
   private RequestPostProcessor adminWithGuid(String guid) {
     Jwt token =
         Jwt.withTokenValue("verify-it-token")
             .header("alg", "none")
             .subject(COGNITO_SUB)
-            .claim("custom:idp_user_id", guid)
-            .claim("custom:idp_username", ACTING_USER)
-            .claim("cognito:groups", List.of("ILCR_ADMIN"))
+            .claim("idir_user_guid", guid)
+            .claim("idir_username", ACTING_USER)
+            .claim("identity_provider", "azureidir")
+            .claim("client_roles", List.of("ILCR_ADMIN"))
             .build();
     return authentication(CONVERTER.convert(token));
   }

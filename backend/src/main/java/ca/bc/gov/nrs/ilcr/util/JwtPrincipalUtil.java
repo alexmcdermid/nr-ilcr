@@ -3,6 +3,7 @@ package ca.bc.gov.nrs.ilcr.util;
 import ca.bc.gov.nrs.ilcr.BackendConstants;
 import ca.bc.gov.nrs.ilcr.dto.base.IdentityProvider;
 import ca.bc.gov.nrs.ilcr.dto.base.Role;
+import ca.bc.gov.nrs.ilcr.security.FamTokenClaims;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -496,6 +497,9 @@ public class JwtPrincipalUtil {
   }
 
   private static Set<String> getClaimGroups(Map<String, Object> tokenAttributes) {
+    if (tokenAttributes.containsKey("identity_provider")) {
+      return Set.copyOf(FamTokenClaims.applicationRoles(tokenAttributes));
+    }
     Object groups = tokenAttributes.get("cognito:groups");
 
     if (groups instanceof List) {
@@ -538,6 +542,13 @@ public class JwtPrincipalUtil {
   }
 
   /**
+   * Audit columns require the actual directory username; neither GUID nor subject is a substitute.
+   */
+  public static String getAuditUsername(Jwt jwt) {
+    return getClaimValue(jwt.getClaims(), "custom:idp_username");
+  }
+
+  /**
    * Retrieves the value of a specified claim from the claims map. If the claim is not present,
    * returns an empty string.
    *
@@ -547,7 +558,26 @@ public class JwtPrincipalUtil {
    *     present.
    */
   private static String getClaimValue(Map<String, Object> claims, String claimName) {
-    return claims.getOrDefault(claimName, StringUtils.EMPTY).toString();
+    // Legacy synthetic fixtures still use custom claims. Real authentication accepts
+    // only the CSS issuer/client/access-token contract checked by the decoder.
+    if (claims.containsKey("identity_provider")) {
+      return switch (claimName) {
+        case "custom:idp_name" ->
+            FamTokenClaims.isStaff(claims)
+                ? "IDIR"
+                : (FamTokenClaims.isBusiness(claims) ? "BCEIDBUSINESS" : "");
+        case "custom:idp_username" -> FamTokenClaims.username(claims);
+        case "custom:idp_user_id" -> FamTokenClaims.guid(claims);
+        case "custom:idp_display_name" ->
+            FamTokenClaims.string(claims, "display_name").isBlank()
+                ? FamTokenClaims.string(claims, "name")
+                : FamTokenClaims.string(claims, "display_name");
+        case "custom:idp_business_id" -> FamTokenClaims.string(claims, "bceid_business_guid");
+        case "custom:idp_business_name" -> FamTokenClaims.string(claims, "bceid_business_name");
+        default -> FamTokenClaims.string(claims, claimName);
+      };
+    }
+    return FamTokenClaims.string(claims, claimName);
   }
 
   /**

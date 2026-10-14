@@ -7,7 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,9 +30,9 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
  * rule tightened for one status cannot silently drift from the other.
  *
  * <p>Security ON in both subclasses: the admin's authorities come through the production {@link
- * CognitoGroupsJwtAuthenticationConverter}. The test post-processor names the token from its {@code
- * sub} rather than the converter's {@code custom:idp_username}, so both carry the one audit name
- * the write must stamp.
+ * FamJwtAuthenticationConverter}. The test post-processor names the token from its {@code sub}
+ * rather than the converter's {@code custom:idp_username}, so both carry the one audit name the
+ * write must stamp.
  */
 abstract class Schedule11CorrectionSupport extends AbstractOracleIT {
 
@@ -40,8 +40,8 @@ abstract class Schedule11CorrectionSupport extends AbstractOracleIT {
   static final String LOCATIONS = ENDPOINT + "/locations";
   static final String CHECK_STATUS = ENDPOINT + "/check-status";
   static final String ADMIN_NAME = "IDIR\\CORRECTOR";
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   static final String SAVED = "Data saved successfully";
   static final String STALE =
@@ -62,9 +62,10 @@ abstract class Schedule11CorrectionSupport extends AbstractOracleIT {
         .jwt(
             j ->
                 j.subject(ADMIN_NAME)
-                    .claim("cognito:groups", List.of("ILCR_ADMIN"))
-                    .claim("custom:idp_username", ADMIN_NAME)
-                    .claim("custom:idp_user_id", "CORRECTORADMIN00000000000000001"))
+                    .claim("identity_provider", "azureidir")
+                    .claim("client_roles", List.of("ILCR_ADMIN"))
+                    .claim("idir_username", ADMIN_NAME)
+                    .claim("idir_user_guid", "CORRECTORADMIN00000000000000001"))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 

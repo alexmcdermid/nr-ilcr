@@ -7,7 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -21,11 +21,11 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
  * Acceptance test for authorization on VIEW_SCHEDULE (AD-7) for Schedule 9, UC-SCH9-001. Security
  * ON; drives the real {@code oauth2ResourceServer} chain + {@code @PreAuthorize}.
  *
- * <p>Authorities derive through the PRODUCTION {@link CognitoGroupsJwtAuthenticationConverter}
- * rather than {@code spring-security-test}'s default (which builds authorities from the {@code
- * scope} claim and would bypass the app's own group mapping). Mirrors the Schedule 1/2/4/5/6
- * pattern. Both shipped roles hold EDIT_SCHEDULE, so no JWT can produce a view-only caller — the
- * {@code editable:false} branch is covered by {@code Schedule9ServiceTest}.
+ * <p>Authorities derive through the PRODUCTION {@link FamJwtAuthenticationConverter} rather than
+ * {@code spring-security-test}'s default (which builds authorities from the {@code scope} claim and
+ * would bypass the app's own group mapping). Mirrors the Schedule 1/2/4/5/6 pattern. Both shipped
+ * roles hold EDIT_SCHEDULE, so no JWT can produce a view-only caller — the {@code editable:false}
+ * branch is covered by {@code Schedule9ServiceTest}.
  */
 @TestPropertySource(properties = "ilcr.security.enabled=true")
 @DisplayName("GET /api/v1/schedule9 — authorization on VIEW_SCHEDULE (AD-7)")
@@ -34,14 +34,14 @@ class Schedule9AuthorizationIT extends AbstractOracleIT {
   private static final String ENDPOINT = "/api/v1/schedule9";
   private static final String SEEDED_MILL = "514";
   private static final String SEEDED_YEAR = "2021";
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   @MockitoBean private JwtDecoder jwtDecoder;
 
   private RequestPostProcessor jwtWithGroups(List<String> groups) {
     return jwt()
-        .jwt(j -> j.claim("cognito:groups", groups))
+        .jwt(j -> j.claim("identity_provider", "azureidir").claim("client_roles", groups))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 

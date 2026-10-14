@@ -1,8 +1,18 @@
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import axios from 'axios'
-import { fetchAuthSession, signInWithRedirect, signOut } from 'aws-amplify/auth'
-import { Hub } from 'aws-amplify/utils'
+import {
+  AUTH_CALLBACK_PATH,
+  completeOidcLogin,
+  endOidcSession,
+  getOidcReturnPath,
+  getOidcUser,
+  getUserManager,
+  isSessionEnded,
+  isOidcConfigured,
+  startOidcLogin,
+} from '@/service/oidc-service'
+import { onSessionExpired } from './sessionExpiredSignal'
 import apiService from '@/service/api-service'
 import { AuthContext } from './AuthContext'
 import { useIdleTimeout } from './useIdleTimeout'
@@ -39,19 +49,18 @@ function currentRoute(): string {
 }
 
 function isOAuthCallback(): boolean {
-  return new URLSearchParams(window.location.search).has('code')
+  return window.location.pathname === AUTH_CALLBACK_PATH
 }
 
 /**
- * Restore the route the user asked for before being bounced to the Hosted UI. Amplify returns it as
- * the {@code customState} on the {@code customOAuthState} Hub event; we replace history and let the
+ * Restore the same-origin route saved in OIDC state before login. Replace history and let the
  * router re-evaluate rather than full-reload.
  */
 function restoreRoute(path: string): void {
   if (!path || path === currentRoute()) {
     return
   }
-  window.history.replaceState(null, '', path)
+  window.history.replaceState(window.history.state, '', path)
   window.dispatchEvent(new PopStateEvent('popstate'))
 }
 
@@ -61,32 +70,47 @@ export default function RealAuthProvider({ children }: Props) {
   const [error, setError] = useState<LoadError | null>(null)
   const [devRole, setDevRole] = useState<string | null>(initialDevRole)
   const redirectingRef = useRef(false)
+  const signingOutRef = useRef(false)
 
   const loadUser = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
-      const session = await fetchAuthSession()
-      if (!session.tokens?.idToken) {
+      if (!isOidcConfigured) throw new Error('Sign-in is unavailable')
+      const callback = isOAuthCallback()
+      const session = callback
+        ? await completeOidcLogin()
+        : await getOidcUser().catch(async (err: unknown) => {
+            if (!isSessionEnded(err)) throw err
+            // Discard an unrenewable stored session before starting a fresh login.
+            // Callback failures and temporary outages must not remove stored credentials.
+            await getUserManager()
+              .removeUser()
+              .catch(() => undefined)
+            return null
+          })
+      if (!session) {
         setUser(null)
         return
       }
+      if (callback) restoreRoute(getOidcReturnPath(session))
       // roles:[] (no ILCR group) is a valid, non-looping state — the user is set and the no-access
       // screen renders it; do NOT null the user here.
       const { data } = await apiService.getAxiosInstance().get<AuthUser>('/v1/me')
       setUser(data)
     } catch (err: unknown) {
       setUser(null)
+      if (isOAuthCallback()) restoreRoute('/')
       const status = axios.isAxiosError(err) ? err.response?.status : undefined
       if (status === 401) {
-        // Token rejected/expired — leave error null so the effect bounces to re-authenticate.
+        setError({ status, message: 'Your sign-in was rejected. Please sign out and try again.' })
         return
       }
       if (status === 403) {
         setError({ status, message: 'Your account is not permitted to use this application.' })
         return
       }
-      // A 5xx, a network error, or an Amplify session failure: do NOT bounce — with a valid Cognito
+      // A 5xx, a network error, or another OIDC failure: do NOT bounce — with a valid SSO
       // session the Hosted UI would redirect straight back and loop. Offer a retry instead.
       setError({ status, message: 'The server is temporarily unavailable. Please try again.' })
     } finally {
@@ -95,48 +119,58 @@ export default function RealAuthProvider({ children }: Props) {
   }, [])
 
   const signIn = useCallback(async () => {
-    await signInWithRedirect({ customState: currentRoute() })
+    await startOidcLogin()
   }, [])
 
   const doSignOut = useCallback(async () => {
-    // signOut() with the OAuth config redirects through the Cognito/loginproxy logout endpoint,
-    // ending the upstream session (shared-workstation safety), then back to redirectSignOut.
-    await signOut()
+    signingOutRef.current = true
+    setUser(null)
+    try {
+      await endOidcSession()
+    } catch {
+      setError({ status: 401, message: 'Sign-out could not be completed. Please try again.' })
+    }
   }, [])
 
   useEffect(() => {
-    const unsubscribe = Hub.listen('auth', ({ payload }) => {
-      switch (payload.event) {
-        case 'signedIn':
-          void loadUser()
-          break
-        case 'signedOut':
-        case 'tokenRefresh_failure':
-          setUser(null)
-          break
-        case 'customOAuthState':
-          restoreRoute(payload.data)
-          break
-        default:
-          break
-      }
+    const manager = isOidcConfigured ? getUserManager() : undefined
+    const loaded = () => {
+      void loadUser()
+    }
+    manager?.events.addUserLoaded(loaded)
+    const unsubscribe = onSessionExpired(() => {
+      void doSignOut()
     })
     void loadUser()
-    return unsubscribe
-  }, [loadUser])
+    return () => {
+      manager?.events.removeUserLoaded(loaded)
+      unsubscribe()
+    }
+  }, [loadUser, doSignOut])
 
   useEffect(() => {
     // Unauthenticated with no blocking error (and not mid-callback) → bounce to the Hosted UI once.
-    // The !error guard is what breaks the redirect loop on 403/5xx: a valid Cognito session would
+    // The !error guard is what breaks the redirect loop on 403/5xx: a valid SSO session would
     // otherwise return immediately and re-trigger the failing /me.
-    if (!isLoading && !user && !error && !isOAuthCallback() && !redirectingRef.current) {
+    if (
+      !isLoading &&
+      !user &&
+      !error &&
+      !isOAuthCallback() &&
+      !redirectingRef.current &&
+      !signingOutRef.current
+    ) {
       redirectingRef.current = true
       void signIn()
     }
   }, [isLoading, user, error, signIn])
 
   // Arm the 60-minute idle timeout once a real session exists; activity resets it, inactivity signs out.
-  useIdleTimeout(doSignOut, IDLE_TIMEOUT_MS, user !== null)
+  useIdleTimeout(doSignOut, IDLE_TIMEOUT_MS, user !== null, () => {
+    void getOidcUser().catch((error) => {
+      if (isSessionEnded(error)) void doSignOut()
+    })
+  })
 
   const realRoles = user?.roles ?? []
   const effectiveRoles = import.meta.env.DEV && devRole ? [devRole] : realRoles
@@ -170,8 +204,8 @@ export default function RealAuthProvider({ children }: Props) {
   }
 
   if (error) {
-    // Blocking failure — render a screen (not a redirect) so a valid Cognito session can't loop.
-    const accessDenied = error.status === 403
+    // Blocking failure — render a screen (not a redirect) so a valid SSO session can't loop.
+    const accessDenied = error.status === 403 || error.status === 401
     return (
       <div role="alert" className="auth-error">
         <h2>{accessDenied ? 'Access denied' : 'Connection error'}</h2>
@@ -193,7 +227,7 @@ export default function RealAuthProvider({ children }: Props) {
     // Auth chrome while loading or being redirected to sign in. Labelled + non-visual-only for a11y.
     return (
       <div role="status" aria-live="polite" className="auth-signing-in">
-        Signing in…
+        {signingOutRef.current ? 'Signing out…' : 'Signing in…'}
       </div>
     )
   }

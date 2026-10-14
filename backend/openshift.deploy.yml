@@ -67,9 +67,6 @@ parameters:
   - name: ORACLEDB_PORT
     description: Oracle database TCPS port
     value: "1543"
-  - name: COGNITO_REGION
-    description: AWS region of the Cognito (FAM) user pool
-    value: ca-central-1
 objects:
   - apiVersion: apps/v1
     kind: Deployment
@@ -184,18 +181,16 @@ objects:
                       key: ORACLEDB_SERVICENAME
                 - name: ORACLEDB_KEYSTORE
                   value: /cert/jssecacerts
-                - name: COGNITO_REGION
-                  value: ${COGNITO_REGION}
-                - name: COGNITO_USER_POOL
+                - name: ILCR_OIDC_ISSUER_URI
                   valueFrom:
-                    secretKeyRef:
-                      name: ${NAME}-${ZONE}-${COMPONENT}
-                      key: COGNITO_USER_POOL
-                - name: COGNITO_CLIENT_ID
+                    configMapKeyRef:
+                      name: ${NAME}-${ZONE}-backend-auth
+                      key: ILCR_OIDC_ISSUER_URI
+                - name: ILCR_OIDC_CLIENT_ID
                   valueFrom:
-                    secretKeyRef:
-                      name: ${NAME}-${ZONE}-${COMPONENT}
-                      key: COGNITO_CLIENT_ID
+                    configMapKeyRef:
+                      name: ${NAME}-${ZONE}-backend-auth
+                      key: ILCR_OIDC_CLIENT_ID
                 - name: ORACLEDB_SECRET
                   valueFrom:
                     secretKeyRef:

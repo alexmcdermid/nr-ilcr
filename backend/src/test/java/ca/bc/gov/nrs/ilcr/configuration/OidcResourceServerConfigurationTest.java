@@ -12,18 +12,18 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
  * {@code jwt()} post-processor never decodes), so the bean method itself is exercised here — the
  * configured happy path and the fail-closed guard that refuses to start without a client id.
  */
-class CognitoResourceServerConfigurationTest {
+class OidcResourceServerConfigurationTest {
 
   private static final String JWKS =
       "https://cognito-idp.ca-central-1.amazonaws.com/ca-central-1_pool/.well-known/jwks.json";
   private static final String ISSUER =
       "https://cognito-idp.ca-central-1.amazonaws.com/ca-central-1_pool";
 
-  private final CognitoResourceServerConfiguration configuration =
-      new CognitoResourceServerConfiguration();
+  private final OidcResourceServerConfiguration configuration =
+      new OidcResourceServerConfiguration();
 
   @Test
-  @DisplayName("builds a JwtDecoder when the client id (audience) is configured")
+  @DisplayName("builds a JwtDecoder when the client id (authorized party) is configured")
   void buildsDecoderWhenAudienceConfigured() {
     JwtDecoder decoder = configuration.jwtDecoder(JWKS, ISSUER, "web-client-id");
 
@@ -36,6 +36,6 @@ class CognitoResourceServerConfigurationTest {
   void throwsWhenAudienceMissing() {
     assertThatThrownBy(() -> configuration.jwtDecoder(JWKS, ISSUER, "   "))
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("allowed-audience");
+        .hasMessageContaining("ILCR_OIDC_CLIENT_ID");
   }
 }

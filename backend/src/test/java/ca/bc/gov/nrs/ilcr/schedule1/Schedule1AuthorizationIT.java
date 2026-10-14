@@ -6,7 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -20,8 +20,8 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 /**
  * Acceptance test for authorization on VIEW_SCHEDULE (AD-7). Runs with security ON and drives the
  * real {@code oauth2ResourceServer} chain + {@code @PreAuthorize}. Authorities are derived through
- * the production {@link CognitoGroupsJwtAuthenticationConverter} (the spring-security-test {@code
- * jwt()} default reads only the {@code scope} claim, so we plug our converter into the {@code
+ * the production {@link FamJwtAuthenticationConverter} (the spring-security-test {@code jwt()}
+ * default reads only the {@code scope} claim, so we plug our converter into the {@code
  * .authorities(...)} overload) — so this exercises the real cognito:groups &rarr; role &rarr;
  * action path end to end.
  */
@@ -36,8 +36,8 @@ class Schedule1AuthorizationIT extends AbstractOracleIT {
 
   private static final long SEEDED_MILL = 514L;
   private static final int SEEDED_YEAR = 2021;
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   // With security on, oauth2ResourceServer().jwt() needs a JwtDecoder bean at config time. The
   // jwt() post-processor injects the Jwt directly (no real decoding), so a mock satisfies
@@ -46,7 +46,7 @@ class Schedule1AuthorizationIT extends AbstractOracleIT {
 
   private RequestPostProcessor jwtWithGroups(List<String> groups) {
     return jwt()
-        .jwt(j -> j.claim("cognito:groups", groups))
+        .jwt(j -> j.claim("identity_provider", "azureidir").claim("client_roles", groups))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 
@@ -135,8 +135,9 @@ class Schedule1AuthorizationIT extends AbstractOracleIT {
                     jwt()
                         .jwt(
                             j ->
-                                j.claim("custom:idp_user_id", CANONICAL_SUBMITTER_GUID)
-                                    .claim("cognito:groups", List.of()))
+                                j.claim("idir_user_guid", CANONICAL_SUBMITTER_GUID)
+                                    .claim("identity_provider", "azureidir")
+                                    .claim("client_roles", List.of()))
                         .authorities(j -> CONVERTER.convert(j).getAuthorities())))
         .andExpect(status().isForbidden())
         .andExpect(content().contentTypeCompatibleWith("application/problem+json"));

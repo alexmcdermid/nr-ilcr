@@ -10,8 +10,8 @@ const ACTIVITY_EVENTS = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchst
 const STORAGE_KEY = 'nr-ilcr.last-activity'
 
 /**
- * Sign the user out after {@code timeoutMs} of INACTIVITY (60-minute idle timeout). Amplify keeps the
- * access/id token refreshed while the user is active, so an active session never expires; this adds
+ * Sign the user out after {@code timeoutMs} of INACTIVITY (60-minute idle timeout). OIDC renews the
+ * access token refreshed while the user is active, so an active session never expires; this adds
  * the idle cap for shared-workstation safety. Only armed when {@code enabled} (an authenticated
  * session).
  *
@@ -25,8 +25,15 @@ const STORAGE_KEY = 'nr-ilcr.last-activity'
  * @param timeoutMs the inactivity window in milliseconds
  * @param enabled arm the timer only when true (e.g. authenticated)
  */
-export function useIdleTimeout(onIdle: () => void, timeoutMs: number, enabled: boolean): void {
+export function useIdleTimeout(
+  onIdle: () => void,
+  timeoutMs: number,
+  enabled: boolean,
+  onActivity?: () => void,
+): void {
   // Keep the latest callback without re-arming the listeners each render.
+  const onActivityRef = useRef(onActivity)
+  onActivityRef.current = onActivity
   const onIdleRef = useRef(onIdle)
   onIdleRef.current = onIdle
 
@@ -35,8 +42,14 @@ export function useIdleTimeout(onIdle: () => void, timeoutMs: number, enabled: b
       return undefined
     }
 
+    let lastRenewalCheck = 0
     const markActive = () => {
-      localStorage.setItem(STORAGE_KEY, String(Date.now()))
+      const now = Date.now()
+      localStorage.setItem(STORAGE_KEY, String(now))
+      if (now - lastRenewalCheck >= 30_000) {
+        lastRenewalCheck = now
+        onActivityRef.current?.()
+      }
     }
 
     let timer: ReturnType<typeof setTimeout>

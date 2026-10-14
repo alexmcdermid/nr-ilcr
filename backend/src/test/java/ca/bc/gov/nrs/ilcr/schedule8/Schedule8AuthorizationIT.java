@@ -5,7 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -18,7 +18,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 /**
  * Acceptance test for authorization on VIEW_SCHEDULE (AD-7) for Schedule 8. Security ON; drives the
  * real {@code oauth2ResourceServer} chain + {@code @PreAuthorize}. Authorities derive through the
- * production {@link CognitoGroupsJwtAuthenticationConverter}, mirroring the Schedule 1/2/4 pattern.
+ * production {@link FamJwtAuthenticationConverter}, mirroring the Schedule 1/2/4 pattern.
  */
 @TestPropertySource(properties = "ilcr.security.enabled=true")
 @DisplayName("GET /api/v1/schedule8 — authorization on VIEW_SCHEDULE (AD-7)")
@@ -27,14 +27,14 @@ class Schedule8AuthorizationIT extends AbstractOracleIT {
   private static final String ENDPOINT = "/api/v1/schedule8";
   private static final long SEEDED_MILL = 570L;
   private static final int SEEDED_YEAR = 2021;
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   @MockitoBean private JwtDecoder jwtDecoder;
 
   private RequestPostProcessor jwtWithGroups(List<String> groups) {
     return jwt()
-        .jwt(j -> j.claim("cognito:groups", groups))
+        .jwt(j -> j.claim("identity_provider", "azureidir").claim("client_roles", groups))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 

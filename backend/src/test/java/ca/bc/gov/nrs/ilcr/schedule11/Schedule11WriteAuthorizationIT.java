@@ -9,7 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -24,7 +24,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
  * Story 25.2 acceptance — authorization on the Schedule 11 writes (AC8; AD-7). Security ON: drives
  * the real {@code oauth2ResourceServer} chain + {@code @PreAuthorize} ({@code EDIT_SCHEDULE} on
  * POST/PUT/DELETE, {@code VIEW_SCHEDULE} on check-status), authorities via the production {@link
- * CognitoGroupsJwtAuthenticationConverter}.
+ * FamJwtAuthenticationConverter}.
  *
  * <p>Bodies on the 403 write tests are VALID because {@code @Valid} body binding runs during
  * argument resolution BEFORE {@code @PreAuthorize} fires — an invalid body would yield 400, not the
@@ -55,8 +55,8 @@ class Schedule11WriteAuthorizationIT extends AbstractOracleIT {
   private static final String LOCATIONS = "/api/v1/schedule11/locations";
   private static final String CHECK_STATUS = "/api/v1/schedule11/check-status";
   private static final String PROBLEM_JSON = "application/problem+json";
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   // A valid create body — so the 403 fires at @PreAuthorize, not at @Valid (which runs first).
   private static final String VALID_BODY =
@@ -69,7 +69,7 @@ class Schedule11WriteAuthorizationIT extends AbstractOracleIT {
 
   private RequestPostProcessor jwtWithGroups(List<String> groups) {
     return jwt()
-        .jwt(j -> j.claim("cognito:groups", groups))
+        .jwt(j -> j.claim("identity_provider", "azureidir").claim("client_roles", groups))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 

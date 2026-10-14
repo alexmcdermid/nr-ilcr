@@ -1,49 +1,68 @@
-/**
- * Runtime environment access. Cognito settings are injected at runtime via a `window.amplifyConfig`
- * global (a static `amplify-config.js` served before the bundle and overridden per-environment by a
- * ConfigMap in OpenShift), so the same image ships everywhere and no secrets are baked into the
- * build.
- */
-export type AmplifyRuntimeConfig = {
+export type AppRuntimeConfig = {
   mockUser?: boolean
-  userPoolId?: string
-  userPoolClientId?: string
-  cognitoDomain?: string
-  redirectSignIn?: string
-  redirectSignOut?: string
-  oauthScopes?: string[]
+  appEnv?: string
+  oidcIssuerUri?: string
+  oidcClientId?: string
+  oidcIdirHint?: string
+  oidcBceidHint?: string
+  oidcSiteminderLogoutUrl?: string
+  idleTimeoutMinutes?: number
+  famClientId?: string
 }
 
 declare global {
   interface Window {
-    amplifyConfig?: AmplifyRuntimeConfig
+    appConfig?: AppRuntimeConfig
   }
 }
 
-export function getAmplifyRuntimeConfig(): AmplifyRuntimeConfig | undefined {
-  return typeof window === 'undefined' ? undefined : window.amplifyConfig
+export function getAppRuntimeConfig(): AppRuntimeConfig | undefined {
+  return typeof window === 'undefined' ? undefined : window.appConfig
 }
 
 function isLocalHost(): boolean {
-  if (typeof window === 'undefined') {
-    return false
-  }
+  if (typeof window === 'undefined') return false
   const host = window.location.hostname
   return (
-    host === 'localhost' ||
-    host === '127.0.0.1' ||
-    host === '0.0.0.0' ||
-    host === '::1' ||
+    ['localhost', '127.0.0.1', '0.0.0.0', '::1', '[::1]'].includes(host) ||
     host.endsWith('.localhost')
   )
 }
 
-/**
- * Whether the mock auth provider is active. Double-gated (matching the nr-csp pattern): the runtime
- * config must opt in AND the app must be on a local host. A deployed environment sets
- * {@code mockUser: false} in its ConfigMap and is never on localhost, so a live role-switcher can
- * never surface in DEV/TEST/PROD even if a stray config slipped through.
- */
+// Mock authentication needs both a runtime opt-in and a local browser origin.
 export function isMockAuth(): boolean {
-  return getAmplifyRuntimeConfig()?.mockUser === true && isLocalHost()
+  return getAppRuntimeConfig()?.mockUser === true && isLocalHost()
+}
+
+const readOidcSetting = (field: keyof AppRuntimeConfig, viteKey: string): string | undefined => {
+  const runtime = getAppRuntimeConfig()?.[field]
+  return typeof runtime === 'string' && runtime.trim() ? runtime.trim() : import.meta.env[viteKey]
+}
+
+export const env = {
+  mockUser: isMockAuth(),
+  appEnv: getAppRuntimeConfig()?.appEnv ?? 'dev',
+  isDevelopment: import.meta.env.DEV,
+  isProduction: import.meta.env.PROD,
+  idleTimeoutMs: (getAppRuntimeConfig()?.idleTimeoutMinutes ?? 60) * 60_000,
+  get VITE_OIDC_ISSUER_URI() {
+    return readOidcSetting('oidcIssuerUri', 'VITE_OIDC_ISSUER_URI')
+  },
+  get VITE_OIDC_CLIENT_ID() {
+    return readOidcSetting('oidcClientId', 'VITE_OIDC_CLIENT_ID')
+  },
+  get VITE_OIDC_IDIR_HINT() {
+    return readOidcSetting('oidcIdirHint', 'VITE_OIDC_IDIR_HINT')
+  },
+  get VITE_OIDC_BCEID_HINT() {
+    return readOidcSetting('oidcBceidHint', 'VITE_OIDC_BCEID_HINT')
+  },
+  get VITE_OIDC_SITEMINDER_LOGOUT_URL() {
+    return (
+      readOidcSetting('oidcSiteminderLogoutUrl', 'VITE_OIDC_SITEMINDER_LOGOUT_URL') ??
+      (getAppRuntimeConfig()?.appEnv === 'prod'
+        ? 'https://logon7.gov.bc.ca/clp-cgi/logoff.cgi'
+        : 'https://logontest7.gov.bc.ca/clp-cgi/logoff.cgi')
+    )
+  },
 }

@@ -8,7 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import java.util.function.Consumer;
@@ -22,8 +22,8 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 /**
  * Acceptance test for {@code GET /api/v1/me} with security ON. Drives the real {@code
- * oauth2ResourceServer} chain and the production {@link CognitoGroupsJwtAuthenticationConverter} so
- * {@code /me.roles} is proven to come from the same authorities method security reads (the
+ * oauth2ResourceServer} chain and the production {@link FamJwtAuthenticationConverter} so {@code
+ * /me.roles} is proven to come from the same authorities method security reads (the
  * standalone-converter bug this guards against would let {@code /me} and {@code @PreAuthorize}
  * disagree). The decoder is mocked because the {@code jwt()} post-processor injects a
  * pre-authenticated principal and never decodes.
@@ -33,8 +33,8 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 class UserMeIT extends AbstractOracleIT {
 
   private static final String ENDPOINT = "/api/v1/me";
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   @MockitoBean private JwtDecoder jwtDecoder;
 
@@ -42,7 +42,7 @@ class UserMeIT extends AbstractOracleIT {
     return jwt()
         .jwt(
             builder -> {
-              builder.claim("cognito:groups", groups);
+              builder.claim("identity_provider", "azureidir").claim("client_roles", groups);
               claims.accept(builder);
             })
         .authorities(jwt -> CONVERTER.convert(jwt).getAuthorities());
@@ -63,9 +63,9 @@ class UserMeIT extends AbstractOracleIT {
                         List.of("ILCR_ADMIN"),
                         builder ->
                             builder
-                                .claim("custom:idp_user_id", "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4")
-                                .claim("custom:idp_display_name", "Doe, John")
-                                .claim("custom:idp_name", "idir")
+                                .claim("idir_user_guid", "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4")
+                                .claim("display_name", "Doe, John")
+                                .claim("identity_provider", "idir")
                                 .claim("email", "john.doe@gov.bc.ca"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.userGuid").value("A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4"))
@@ -109,26 +109,31 @@ class UserMeIT extends AbstractOracleIT {
                     famJwt(
                         List.of("SOME_OTHER_APP_ADMIN"),
                         builder ->
-                            builder.claim(
-                                "custom:idp_user_id", "GUIDNOACCESS0000000000000000000A"))))
+                            builder.claim("idir_user_guid", "GUIDNOACCESS0000000000000000000A"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.userGuid").value("GUIDNOACCESS0000000000000000000A"))
         .andExpect(jsonPath("$.roles", empty()));
   }
 
   @Test
-  @DisplayName("token missing custom:idp_* claims -> 200, userGuid falls back to sub, no 500")
-  void missingCustomClaims_doesNotError() throws Exception {
+  @DisplayName(
+      "minimal CSS profile keeps directory identity when optional name/email claims are absent")
+  void minimalCssProfileDoesNotError() throws Exception {
     mockMvc
         .perform(
             get(ENDPOINT)
                 .with(
                     famJwt(
-                        List.of("ILCR_SUBMITTER"), builder -> builder.subject("cognito-sub-xyz"))))
+                        List.of("ILCR_SUBMITTER"),
+                        builder ->
+                            builder
+                                .subject("keycloak-user-uuid")
+                                .claim("idir_username", "JSMITH")
+                                .claim("idir_user_guid", "0123456789abcdef0123456789abcdef"))))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.userGuid").value("cognito-sub-xyz"))
-        .andExpect(jsonPath("$.displayName").value("cognito-sub-xyz"))
-        .andExpect(jsonPath("$.identityProvider").doesNotExist())
+        .andExpect(jsonPath("$.userGuid").value("0123456789ABCDEF0123456789ABCDEF"))
+        .andExpect(jsonPath("$.displayName").value("0123456789ABCDEF0123456789ABCDEF"))
+        .andExpect(jsonPath("$.identityProvider").value("IDIR"))
         .andExpect(jsonPath("$.roles", contains("ILCR_SUBMITTER")));
   }
 

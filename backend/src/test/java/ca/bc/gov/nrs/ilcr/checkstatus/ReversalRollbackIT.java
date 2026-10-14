@@ -11,7 +11,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -62,8 +62,8 @@ class ReversalRollbackIT extends AbstractOracleIT {
       "An error has been found submitting schedules. The error details have been logged."
           + " Please contact ILCR application support.";
 
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   @MockitoBean private JwtDecoder jwtDecoder;
   @Autowired private JdbcTemplate jdbcTemplate;
@@ -72,19 +72,20 @@ class ReversalRollbackIT extends AbstractOracleIT {
   /**
    * Built through the PRODUCTION converter, as {@code SetToDraftIT} does and for the reason it
    * gives: {@code spring-security-test}'s bare {@code jwt()} never calls {@link
-   * CognitoGroupsJwtAuthenticationConverter}, so the principal name falls back to {@code sub}. This
-   * class first used that shortcut with {@code sub = ACTING_USER}, which made its stamped-row
-   * filter pass whichever claim the app read; the 18.1 code review pointed out the class beside it
-   * documents exactly that trap.
+   * FamJwtAuthenticationConverter}, so the principal name falls back to {@code sub}. This class
+   * first used that shortcut with {@code sub = ACTING_USER}, which made its stamped-row filter pass
+   * whichever claim the app read; the 18.1 code review pointed out the class beside it documents
+   * exactly that trap.
    */
   private RequestPostProcessor admin() {
     Jwt token =
         Jwt.withTokenValue("reversal-rollback-it-token")
             .header("alg", "none")
             .subject("99999999-8888-7777-6666-555555555555")
-            .claim("custom:idp_user_id", ADMIN_GUID)
-            .claim("custom:idp_username", ACTING_USER)
-            .claim("cognito:groups", List.of("ILCR_ADMIN"))
+            .claim("idir_user_guid", ADMIN_GUID)
+            .claim("idir_username", ACTING_USER)
+            .claim("identity_provider", "azureidir")
+            .claim("client_roles", List.of("ILCR_ADMIN"))
             .build();
     return authentication(CONVERTER.convert(token));
   }

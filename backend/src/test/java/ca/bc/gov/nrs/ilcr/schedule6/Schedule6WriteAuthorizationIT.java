@@ -10,7 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -25,8 +25,8 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
  * Story 8.2/Task 8 acceptance — authorization on the Schedule 6 writes (AC8; AD-7). Security ON:
  * drives the real {@code oauth2ResourceServer} chain + {@code @PreAuthorize} ({@code EDIT_SCHEDULE}
  * on the writes, {@code VIEW_SCHEDULE} on check-status), authorities via the production {@link
- * CognitoGroupsJwtAuthenticationConverter}. The retired {@code PUT /records/{recordId}} and {@code
- * PUT /general-comments} no-group-403 cases dropped with their endpoints (Task 8) — the same {@code
+ * FamJwtAuthenticationConverter}. The retired {@code PUT /records/{recordId}} and {@code PUT
+ * /general-comments} no-group-403 cases dropped with their endpoints (Task 8) — the same {@code
  * EDIT_SCHEDULE} authorization requirement they proved is proven for every remaining Schedule 6
  * write here, including the whole-document {@code PUT /api/v1/schedule6} that replaced them.
  *
@@ -54,8 +54,8 @@ class Schedule6WriteAuthorizationIT extends AbstractOracleIT {
   private static final String CHECK_STATUS = "/api/v1/schedule6/check-status";
   private static final String ENDPOINT = "/api/v1/schedule6";
   private static final String PROBLEM_JSON = "application/problem+json";
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   // A valid record body — so a 403 fires at @PreAuthorize, not at @Valid (which runs first).
   // No revisionCount: RoadRecordRequest dropped that field (Task 8) since POST /records never
@@ -71,7 +71,7 @@ class Schedule6WriteAuthorizationIT extends AbstractOracleIT {
 
   private RequestPostProcessor jwtWithGroups(List<String> groups) {
     return jwt()
-        .jwt(j -> j.claim("cognito:groups", groups))
+        .jwt(j -> j.claim("identity_provider", "azureidir").claim("client_roles", groups))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 

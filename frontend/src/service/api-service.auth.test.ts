@@ -1,126 +1,76 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { server } from '@/test-setup'
-
-const mocks = vi.hoisted(() => ({
-  fetchAuthSession: vi.fn(),
-  signInWithRedirect: vi.fn(),
+const mocks = vi.hoisted(() => ({ user: vi.fn(), expired: vi.fn(), ended: false }))
+vi.mock('@/env', () => ({ isMockAuth: () => false }))
+vi.mock('@/service/oidc-service', () => ({
+  getOidcUser: mocks.user,
+  isSessionEnded: () => mocks.ended,
 }))
-
-// Real-auth branch under test: force isMockAuth() false so the interceptors attach a Bearer and run
-// the 401 refresh/bounce path (the mock branch is covered by the existing mock-mode suites).
-vi.mock('@/env', () => ({
-  isMockAuth: () => false,
-  getAmplifyRuntimeConfig: () => ({}),
-}))
-vi.mock('aws-amplify/auth', () => ({
-  fetchAuthSession: mocks.fetchAuthSession,
-  signInWithRedirect: mocks.signInWithRedirect,
-}))
-
+vi.mock('@/context/auth/sessionExpiredSignal', () => ({ emitSessionExpired: mocks.expired }))
 const PROBE = 'http://localhost:3000/api/v1/probe'
-
-async function importClient() {
-  const mod = await import('./api-service')
-  return mod.default.getAxiosInstance()
+async function client() {
+  return (await import('./api-service')).default.getAxiosInstance()
 }
-
 beforeEach(() => {
-  mocks.fetchAuthSession.mockReset()
-  mocks.signInWithRedirect.mockReset().mockResolvedValue(undefined)
-})
-
-afterEach(() => {
   vi.clearAllMocks()
+  mocks.ended = false
+  mocks.user.mockResolvedValue({ access_token: 'ACCESS-TOKEN', id_token: 'ID-TOKEN' })
 })
-
-describe('APIService real-auth interceptors', () => {
-  it('attaches the ID token as a Bearer on each request', async () => {
-    mocks.fetchAuthSession.mockResolvedValue({
-      tokens: { idToken: { toString: () => 'ID-TOKEN' } },
-    })
-    let seenAuth: string | null = null
+describe('CSS API authentication', () => {
+  it('sends the access token, never the ID token', async () => {
+    let authorization: string | null = null
     server.use(
       http.get(PROBE, ({ request }) => {
-        seenAuth = request.headers.get('authorization')
-        return HttpResponse.json({ ok: true })
+        authorization = request.headers.get('authorization')
+        return HttpResponse.json({})
       }),
     )
-
-    const client = await importClient()
-    await client.get('/v1/probe')
-
-    expect(seenAuth).toBe('Bearer ID-TOKEN')
+    await (await client()).get('/v1/probe')
+    expect(authorization).toBe('Bearer ACCESS-TOKEN')
   })
-
-  it('on 401 refreshes the token and retries the request once', async () => {
-    mocks.fetchAuthSession.mockResolvedValue({
-      tokens: { idToken: { toString: () => 'ID-TOKEN' } },
-    })
+  it('refreshes once and retries a rejected request', async () => {
+    let calls = 0
+    server.use(
+      http.get(PROBE, () =>
+        ++calls === 1 ? new HttpResponse(null, { status: 401 }) : HttpResponse.json({}),
+      ),
+    )
+    await (await client()).get('/v1/probe')
+    expect(calls).toBe(2)
+    expect(mocks.user).toHaveBeenCalledWith({ forceRefresh: true })
+    expect(mocks.expired).not.toHaveBeenCalled()
+  })
+  it('ends a session whose refresh token is rejected', async () => {
+    mocks.ended = true
+    mocks.user.mockImplementation((options) =>
+      options?.forceRefresh
+        ? Promise.reject(new Error('invalid_grant'))
+        : Promise.resolve({ access_token: 'ACCESS-TOKEN' }),
+    )
+    server.use(http.get(PROBE, () => new HttpResponse(null, { status: 401 })))
+    await expect((await client()).get('/v1/probe')).rejects.toBeDefined()
+    expect(mocks.expired).toHaveBeenCalledOnce()
+  })
+  it('preserves the session on a temporary refresh outage', async () => {
+    mocks.user.mockImplementation((options) =>
+      options?.forceRefresh
+        ? Promise.reject(new Error('temporarily unavailable'))
+        : Promise.resolve({ access_token: 'ACCESS-TOKEN' }),
+    )
+    server.use(http.get(PROBE, () => new HttpResponse(null, { status: 401 })))
+    await expect((await client()).get('/v1/probe')).rejects.toBeDefined()
+    expect(mocks.expired).not.toHaveBeenCalled()
+  })
+  it('does not loop when a refreshed token is also rejected', async () => {
     let calls = 0
     server.use(
       http.get(PROBE, () => {
-        calls += 1
-        return calls === 1
-          ? new HttpResponse(null, { status: 401 })
-          : HttpResponse.json({ ok: true })
+        calls++
+        return new HttpResponse(null, { status: 401 })
       }),
     )
-
-    const client = await importClient()
-    const res = await client.get('/v1/probe')
-
+    await expect((await client()).get('/v1/probe')).rejects.toBeDefined()
     expect(calls).toBe(2)
-    expect(res.status).toBe(200)
-    expect(mocks.signInWithRedirect).not.toHaveBeenCalled()
-  })
-
-  it('on 401 bounces to sign-in when the refresh token is gone', async () => {
-    // Request interceptor gets a token; the forced refresh returns none → session is dead → bounce.
-    mocks.fetchAuthSession.mockImplementation((opts?: { forceRefresh?: boolean }) =>
-      Promise.resolve(
-        opts?.forceRefresh
-          ? { tokens: undefined }
-          : { tokens: { idToken: { toString: () => 'ID-TOKEN' } } },
-      ),
-    )
-    server.use(http.get(PROBE, () => new HttpResponse(null, { status: 401 })))
-
-    const client = await importClient()
-    await expect(client.get('/v1/probe')).rejects.toBeDefined()
-
-    expect(mocks.signInWithRedirect).toHaveBeenCalledTimes(1)
-  })
-
-  it('on a transient forced-refresh failure it surfaces the 401 without bouncing (session preserved)', async () => {
-    // forceRefresh rejects (network/provider outage) but a non-forced session still holds a token,
-    // so the route must be preserved — do NOT discard it into a fresh Hosted UI flow (O7).
-    mocks.fetchAuthSession.mockImplementation((opts?: { forceRefresh?: boolean }) =>
-      opts?.forceRefresh
-        ? Promise.reject(new Error('network outage'))
-        : Promise.resolve({ tokens: { idToken: { toString: () => 'ID-TOKEN' } } }),
-    )
-    server.use(http.get(PROBE, () => new HttpResponse(null, { status: 401 })))
-
-    const client = await importClient()
-    await expect(client.get('/v1/probe')).rejects.toBeDefined()
-
-    expect(mocks.signInWithRedirect).not.toHaveBeenCalled()
-  })
-
-  it('on 401 bounces when a forced-refresh failure leaves no usable session', async () => {
-    // forceRefresh rejects AND no session remains (refresh token truly gone) → Amplify confirms no
-    // usable session → bounce.
-    mocks.fetchAuthSession.mockImplementation((opts?: { forceRefresh?: boolean }) =>
-      opts?.forceRefresh
-        ? Promise.reject(new Error('no refresh token'))
-        : Promise.resolve({ tokens: undefined }),
-    )
-    server.use(http.get(PROBE, () => new HttpResponse(null, { status: 401 })))
-
-    const client = await importClient()
-    await expect(client.get('/v1/probe')).rejects.toBeDefined()
-
-    expect(mocks.signInWithRedirect).toHaveBeenCalledTimes(1)
   })
 })

@@ -8,7 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import java.util.Map;
@@ -41,8 +41,8 @@ class ReportingYearIT extends AbstractOracleIT {
   private static final long ACTIVE_MILL = 990L;
   private static final long CLOSED_MILL = 991L;
   private static final long ACTIVE_MILL_WITHOUT_CURRENT_STATUS = 992L;
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   @MockitoBean private JwtDecoder jwtDecoder;
 
@@ -73,7 +73,7 @@ class ReportingYearIT extends AbstractOracleIT {
 
   private RequestPostProcessor groups(String... groups) {
     return jwt()
-        .jwt(j -> j.claim("cognito:groups", List.of(groups)))
+        .jwt(j -> j.claim("identity_provider", "azureidir").claim("client_roles", List.of(groups)))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 

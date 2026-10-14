@@ -13,7 +13,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import java.util.Map;
@@ -78,8 +78,8 @@ class MillMaintenanceIT extends AbstractOracleIT {
    */
   private static final String ADMIN_USERNAME = "TESTADMN";
 
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   @MockitoBean private JwtDecoder jwtDecoder;
 
@@ -816,9 +816,10 @@ class MillMaintenanceIT extends AbstractOracleIT {
     return jwt()
         .jwt(
             j ->
-                j.claim("cognito:groups", List.of(groups))
-                    .claim("custom:idp_username", ADMIN_USERNAME)
-                    .claim("custom:idp_user_id", "ADMIN001BBBBCCCCDDDDEEEEFFFF0001"))
+                j.claim("identity_provider", "azureidir")
+                    .claim("client_roles", List.of(groups))
+                    .claim("idir_username", ADMIN_USERNAME)
+                    .claim("idir_user_guid", "ADMIN001BBBBCCCCDDDDEEEEFFFF0001"))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 
@@ -833,8 +834,9 @@ class MillMaintenanceIT extends AbstractOracleIT {
     return jwt()
         .jwt(
             j ->
-                j.claim("cognito:groups", List.of("ILCR_ADMIN"))
-                    .claim("custom:idp_user_id", "ADMIN001BBBBCCCCDDDDEEEEFFFF0001"))
+                j.claim("identity_provider", "azureidir")
+                    .claim("client_roles", List.of("ILCR_ADMIN"))
+                    .claim("idir_user_guid", "ADMIN001BBBBCCCCDDDDEEEEFFFF0001"))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 

@@ -31,15 +31,14 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
  * {@code UserLookupIT}, which enable those flags.
  *
  * <p>Runs with security ON. The {@code groups(...)} idiom maps a {@code cognito:groups} claim to
- * authorities through the real {@link CognitoGroupsJwtAuthenticationConverter}, exactly as
- * production does.
+ * authorities through the real {@link FamJwtAuthenticationConverter}, exactly as production does.
  */
 @TestPropertySource(properties = "ilcr.security.enabled=true")
 @DisplayName("Admin-action authorization — submitter/no-group 403, admin passes (Story 5.4)")
 class AdminActionAuthorizationIT extends AbstractOracleIT {
 
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   private static final String CODE_TABLES = "/api/v1/code-tables";
   private static final String REPORTING_YEARS = "/api/v1/admin/reporting-years";
@@ -49,7 +48,7 @@ class AdminActionAuthorizationIT extends AbstractOracleIT {
 
   private RequestPostProcessor groups(String... groups) {
     return jwt()
-        .jwt(j -> j.claim("cognito:groups", List.of(groups)))
+        .jwt(j -> j.claim("identity_provider", "azureidir").claim("client_roles", List.of(groups)))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 

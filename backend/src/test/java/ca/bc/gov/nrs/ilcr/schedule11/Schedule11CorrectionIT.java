@@ -24,7 +24,7 @@ import org.springframework.test.context.TestPropertySource;
 /**
  * Acceptance test — Story 26.2 AC 2/4/5/6/8/9: the ministry corrects a Submitted Schedule 11 on the
  * Licensee's own page, through the page-level save, and no track moves. Security ON: the admin's
- * authorities come through the production {@link CognitoGroupsJwtAuthenticationConverter}. The test
+ * authorities come through the production {@link FamJwtAuthenticationConverter}. The test
  * post-processor names the token from its {@code sub} rather than the converter's {@code
  * custom:idp_username}, so both carry the one audit name the write must stamp.
  *

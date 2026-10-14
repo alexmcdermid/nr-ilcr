@@ -13,7 +13,7 @@ globalThis.ResizeObserver = ResizeObserverMock
 
 // Tests run under the Mock auth provider (no Cognito). jsdom's host is localhost, so this runtime
 // config satisfies the isMockAuth() double-gate and keeps the auth seam on the mock path.
-window.amplifyConfig = { mockUser: true }
+window.appConfig = { mockUser: true }
 
 // jsdom doesn't implement scrollTo; TanStack Router calls it on navigation (scroll restoration). Stub
 // it so router-driven tests don't emit "Not implemented" noise.

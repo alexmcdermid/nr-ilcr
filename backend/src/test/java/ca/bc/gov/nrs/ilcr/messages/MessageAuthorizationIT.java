@@ -6,7 +6,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -21,8 +21,8 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
  * 2026-08-11). The endpoint's only other test is standalone MockMvc, which never engages method
  * security — its {@code @PreAuthorize} could be deleted or the permission name typo'd and every
  * unit test would stay green. Security ON; drives the real {@code oauth2ResourceServer} chain +
- * {@code @PreAuthorize} through the PRODUCTION {@link CognitoGroupsJwtAuthenticationConverter},
- * mirroring the sibling {@code *AuthorizationIT}s.
+ * {@code @PreAuthorize} through the PRODUCTION {@link FamJwtAuthenticationConverter}, mirroring the
+ * sibling {@code *AuthorizationIT}s.
  *
  * <p>The authorized cases double as the production-context pin the standalone test cannot give:
  * resolution and the missing-key 404 run against Boot's auto-configured {@code MessageSource}
@@ -41,14 +41,14 @@ class MessageAuthorizationIT extends AbstractOracleIT {
   /** SUC-001, added to the allowlist by the Data Extract CSV story. */
   private static final String EXTRACT_SUCCESS_KEY = "dataExtractedSuccesfullyInfoMsg";
 
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   @MockitoBean private JwtDecoder jwtDecoder;
 
   private RequestPostProcessor jwtWithGroups(List<String> groups) {
     return jwt()
-        .jwt(j -> j.claim("cognito:groups", groups))
+        .jwt(j -> j.claim("identity_provider", "azureidir").claim("client_roles", groups))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 

@@ -121,7 +121,8 @@ public class MillAssociationController implements MillAssociationApi {
    */
   private static String actingUser(Authentication authentication) {
     if (authentication instanceof JwtAuthenticationToken jwtAuth) {
-      String username = jwtAuth.getToken().getClaimAsString("custom:idp_username");
+      String username =
+          ca.bc.gov.nrs.ilcr.util.JwtPrincipalUtil.getAuditUsername(jwtAuth.getToken());
       if (StringUtils.isBlank(username)) {
         throw new IllegalStateException(
             "token carries no custom:idp_username to stamp the audit columns");

@@ -5,7 +5,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -26,8 +26,8 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 @DisplayName("Per-endpoint mill-scope enforcement (Story 5.7)")
 class MillScopeEnforcementIT extends AbstractOracleIT {
 
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   private static final String SCHEDULE1 = "/api/v1/schedule1";
   private static final String MILL_CONTEXT = "/api/v1/mill-context";
@@ -39,13 +39,16 @@ class MillScopeEnforcementIT extends AbstractOracleIT {
   /** A submitter with NO xref association to any mill (32-char GUID, never seeded). */
   private RequestPostProcessor unassociatedSubmitter() {
     return jwt()
-        .jwt(j -> j.claim("custom:idp_user_id", "UNASSOCIATEDSUBMITTERXXXX0000001"))
+        .jwt(j -> j.claim("idir_user_guid", "UNASSOCIATEDSUBMITTERXXXX0000001"))
         .authorities(new SimpleGrantedAuthority("SUBMITTER"));
   }
 
   private RequestPostProcessor admin() {
     return jwt()
-        .jwt(j -> j.claim("cognito:groups", List.of("ILCR_ADMIN")))
+        .jwt(
+            j ->
+                j.claim("identity_provider", "azureidir")
+                    .claim("client_roles", List.of("ILCR_ADMIN")))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 

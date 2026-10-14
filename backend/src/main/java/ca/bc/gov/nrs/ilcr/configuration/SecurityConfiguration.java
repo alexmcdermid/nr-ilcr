@@ -2,7 +2,7 @@ package ca.bc.gov.nrs.ilcr.configuration;
 
 import ca.bc.gov.nrs.ilcr.BackendConstants;
 import ca.bc.gov.nrs.ilcr.dto.base.Role;
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.security.MockPrincipalFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,7 +31,7 @@ public class SecurityConfiguration {
    * @param mockUserGuid the stand-in directory GUID the mock principal presents, so the
    *     identity-scoped Home mill list (Story 5.5) resolves for a mock submitter instead of
    *     fail-closing to an empty list
-   * @param cognitoGroupsConverter the converter for Cognito groups
+   * @param famConverter the converter for FAM client roles
    * @return the configured security filter chain
    * @throws Exception if an error occurs during configuration
    */
@@ -48,7 +48,7 @@ public class SecurityConfiguration {
       @Value("${ilcr.security.mock-role:ILCR_SUBMITTER}") String mockRoleName,
       @Value("${ilcr.security.mock-user-guid:CANONSUBMITTERBBBBCCCCDDDD000001}")
           String mockUserGuid,
-      CognitoGroupsJwtAuthenticationConverter cognitoGroupsConverter)
+      FamJwtAuthenticationConverter famConverter)
       throws Exception {
     http.csrf(AbstractHttpConfigurer::disable)
         // No .cors(...) is configured, and that omission is a DELIBERATE, documented decision
@@ -88,7 +88,7 @@ public class SecurityConfiguration {
 
     if (securityEnabled) {
       http.oauth2ResourceServer(
-              oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(cognitoGroupsConverter)))
+              oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(famConverter)))
           .authorizeHttpRequests(
               authorize ->
                   authorize

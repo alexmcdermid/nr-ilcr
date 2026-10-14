@@ -8,7 +8,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import ca.bc.gov.nrs.ilcr.security.CognitoGroupsJwtAuthenticationConverter;
+import ca.bc.gov.nrs.ilcr.security.FamJwtAuthenticationConverter;
 import ca.bc.gov.nrs.ilcr.support.AbstractOracleIT;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -22,9 +22,9 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 /**
  * Acceptance test for authorization on the Schedule 3 sub-resources (Story 4.4, AD-7): Other
  * Acceptable Costs and Included Unacceptable Costs. Security ON, authorities derived through the
- * production {@link CognitoGroupsJwtAuthenticationConverter}: GET requires VIEW_SCHEDULE (denied
- * without an ILCR group, allowed for ILCR_SUBMITTER); POST/PUT/DELETE require EDIT_SCHEDULE and are
- * denied 403 before any persistence. The behavior itself is proven security-off by {@link
+ * production {@link FamJwtAuthenticationConverter}: GET requires VIEW_SCHEDULE (denied without an
+ * ILCR group, allowed for ILCR_SUBMITTER); POST/PUT/DELETE require EDIT_SCHEDULE and are denied 403
+ * before any persistence. The behavior itself is proven security-off by {@link
  * Schedule3OtherAcceptableIT} / {@link Schedule3UnacceptableIT}.
  */
 @TestPropertySource(properties = "ilcr.security.enabled=true")
@@ -52,14 +52,14 @@ class Schedule3SubPageAuthorizationIT extends AbstractOracleIT {
       """
       { "rows": [ { "id": 1, "description": "Penalty", "total": 100 } ] }
       """;
-  private static final CognitoGroupsJwtAuthenticationConverter CONVERTER =
-      new CognitoGroupsJwtAuthenticationConverter();
+  private static final FamJwtAuthenticationConverter CONVERTER =
+      new FamJwtAuthenticationConverter();
 
   @MockitoBean private JwtDecoder jwtDecoder;
 
   private RequestPostProcessor jwtWithGroups(List<String> groups) {
     return jwt()
-        .jwt(j -> j.claim("cognito:groups", groups))
+        .jwt(j -> j.claim("identity_provider", "azureidir").claim("client_roles", groups))
         .authorities(j -> CONVERTER.convert(j).getAuthorities());
   }
 
